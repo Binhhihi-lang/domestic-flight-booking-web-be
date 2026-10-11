@@ -1,5 +1,12 @@
 HELP.md
 target/
+
+### Env ###
+.env
+!.env.example
+
+### Office temp (Word/Excel lock files) ###
+~$*
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
