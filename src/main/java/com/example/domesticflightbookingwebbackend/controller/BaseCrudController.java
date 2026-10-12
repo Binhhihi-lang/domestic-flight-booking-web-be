@@ -15,6 +15,9 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Lớp REST chung cho các module master data — 5 endpoint theo cùng khuôn
  * (mục 2.5 — API Design v0.2):
@@ -23,7 +26,8 @@ import org.springframework.web.bind.annotation.RequestParam;
  *   GET    /            danh sách (phân trang, lọc, sắp xếp)
  *   GET    /{id}        chi tiết
  *   POST   /            tạo mới          → 201
- *   PUT    /{id}        cập nhật + toggle is_active
+ *   PUT    /{id}        cập nhật
+ *   PUT    /{id}/active toggle is_active
  *   DELETE /{id}        xóa mềm          → 200, data: null
  * </pre>
  *
@@ -39,9 +43,28 @@ public abstract class BaseCrudController<T, ID, Req, Resp> {
         this.service = service;
     }
 
-    @GetMapping
-    public ApiResponse<PageData<Resp>> list(ListQuery query) {
-        return ApiResponse.success(service.list(query));
+    /**
+     * Endpoint danh sách — KHÔNG đặt {@code @GetMapping} ở đây.
+     *
+     * <p>Mỗi module tự khai {@code @GetMapping} cho danh sách vì filter riêng
+     * khác nhau (airline có {@code status}/{@code country}, airport có
+     * {@code city_id}...). Nếu base map sẵn, module thêm tham số sẽ thành
+     * overload → Spring báo ambiguous mapping.
+     */
+    protected ApiResponse<PageData<Resp>> list(ListQuery query, Map<String, String> filters) {
+        return ApiResponse.success(service.list(query, filters));
+    }
+
+    /** Gom filter, bỏ qua giá trị null/rỗng để không lọc oan. */
+    protected Map<String, String> filters(Object... keyValues) {
+        Map<String, String> map = new HashMap<>();
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            Object value = keyValues[i + 1];
+            if (value != null && !value.toString().isBlank()) {
+                map.put(keyValues[i].toString(), value.toString());
+            }
+        }
+        return map;
     }
 
     @GetMapping("/{id}")

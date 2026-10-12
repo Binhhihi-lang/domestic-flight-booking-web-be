@@ -306,7 +306,7 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 | 3 | Security + JWT + Redis token | 2 | ✅ 12/10/2026 |
 | 4 | Auth & Account | 3 | ✅ 13/10/2026 |
 | 5 | Profile + User Management + RBAC | 4 | ✅ 13/10/2026 |
-| 6 | Master Data (Airline mẫu → 5 module) | 2 | ⬜ |
+| 6 | Master Data (Airline mẫu → 5 module) | 2 | ✅ 13/10/2026 |
 | 7 | Promotion + Voucher + News | 6 | ⬜ |
 | 8 | Test, hardening, tài liệu | 4–7 | ⬜ |
 | + | **V10** — ảnh News/City/Promotion + `permissions.module` + 2 quyền mới | 1 | ✅ 12/10/2026 |
@@ -369,6 +369,15 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 - BR đã cài: chặn ADMIN tự hạ quyền/xóa nếu là ADMIN ACTIVE **cuối cùng** → 1006; đổi role/khóa user → **evict cache quyền** (hiệu lực ngay) + thu hồi refresh token; DELETE = soft delete (`is_active=false` + `is_deleted=true`).
 - **BUG ĐÃ SỬA (phát hiện khi test):** `PageMapper.toPageable` truyền thẳng tên field API (snake_case `created_at`) vào `Sort.by` của Spring Data → `PropertyReferenceException: No property 'created' found` → **500**. Đã thêm chuyển đổi snake_case → camelCase; `defaultSortField` giờ truyền tên property entity (`createdAt`). Thêm test hồi quy.
 - **Đã verify E2E thật (curl):** 21 case pass — profile GET/PUT + no-token 1002; roles trả 3 role; permissions `?module=AUTH` trả 5; user CRUD (create STAFF 1000, role sai 1001, trùng email 1005, list có pagination, sort `created_at,desc` 1000, filter `status`+`role` 1000, update 1000, reset-password 1000, delete soft 1000, GET sau xóa 1004); chặn tự hạ quyền ADMIN cuối 1006; **cache quyền evict hiệu lực ngay** (STAFF bị hạ xuống CUSTOMER → token cũ gọi `/users` trả 1003). `mvn test` → **26/26 pass**.
+
+**Ghi chú Cụm 6 (13/10/2026):**
+- Nâng `BaseCrudService`/`BaseCrudController` hỗ trợ filter riêng từng module (`Map<String,String> filters`); base KHÔNG map `@GetMapping` để module tự khai (tránh ambiguous mapping).
+- 6 module: Airline (mẫu) · City (có `image_url`) · Airport (FK `city_id`, response lồng `city`) · Aircraft (KHÔNG public) · SeatType (CRUD đầy đủ, DELETE chặn khi đang dùng) · SeatMap (`GET/PUT /aircrafts/{id}/seat-map`).
+- SeatMap 4 ràng buộc: không trùng `(seat_row,seat_column)` → 1006; `seat_type` tồn tại + active → 1004/1006; tổng ghế = `seat_capacity` → 1006; máy bay đã có `flight_seats` → 1006.
+- Thêm log (`@Slf4j`) ở BaseCrudService + AirlineService; rút gọn javadoc theo yêu cầu user.
+- **BUG #1 ĐÃ SỬA (nghiêm trọng):** V3 seed ID cố định nhưng sequence IDENTITY không tiến → `INSERT` mới đụng `airlines_pkey`. Thêm `V11__reset_identity_sequences.sql` `setval` cho 7 bảng seed (roles, permissions, airlines, cities, airports, fare_classes, seat_types).
+- **BUG #2 ĐÃ SỬA:** `@PreAuthorize('*_READ_DETAIL')` trên GET detail Airline/City/Airport chặn cả GUEST — sai spec (mục 2.5 ghi **P** = public cho cả GET list lẫn detail). Đã bỏ `@PreAuthorize` ở GET detail 3 module này.
+- **Đã verify E2E thật (curl):** 11/11 case — GET public không token 1000 (airlines/airlines{id}/cities{id}/airports{id}, city lồng đúng); POST/DELETE không token 1002; Aircraft không token 1002 (không public); CUSTOMER GET public 1000 nhưng POST 1003. SeatMap: PUT 4 ghế = capacity 1000, GET configured_seats=4, PUT ≠capacity 1006, trùng vị trí 1006, DELETE seat-type đang dùng 1006. `mvn test` → **26/26 pass**.
 
 ---
 

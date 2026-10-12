@@ -4,26 +4,19 @@ import com.example.domesticflightbookingwebbackend.common.ListQuery;
 import com.example.domesticflightbookingwebbackend.common.PageData;
 import com.example.domesticflightbookingwebbackend.common.PageMapper;
 import com.example.domesticflightbookingwebbackend.exception.ResourceNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
+
 /**
- * Lớp CRUD chung cho các module master data (Airline, City, Airport, Aircraft,
- * SeatType, Promotion, Voucher, News...).
+ * CRUD chung cho master data. Module con khai DTO/mapper/filter + quy tắc riêng.
  *
- * <p>Vì sao cần lớp này: 7 module master data có cùng khuôn list → create →
- * edit → toggle → soft-delete. Viết một lần rồi nhân bản; module con chỉ khai
- * DTO, mapper và quy tắc nghiệp vụ riêng.
- *
- * <p>Module con chỉ cần implement 6 hook bên dưới; phần còn lại (transaction,
- * ném lỗi 1004, phân trang) đã xử lý sẵn ở đây.
- *
- * @param <T>    kiểu entity
- * @param <ID>   kiểu khóa chính (Long)
- * @param <Req>  kiểu DTO request (create/update)
- * @param <Resp> kiểu DTO response
+ * @param <T> entity, <ID> khóa chính, <Req> request DTO, <Resp> response DTO
  */
+@Slf4j
 public abstract class BaseCrudService<T, ID, Req, Resp> {
 
     protected final JpaRepository<T, ID> repository;
@@ -32,37 +25,29 @@ public abstract class BaseCrudService<T, ID, Req, Resp> {
         this.repository = repository;
     }
 
-    // ================= Hook cho module con =================
-
-    /** Tên hiển thị của tài nguyên, dùng trong message lỗi 1004. */
+    /** Tên tài nguyên cho message lỗi 1004. */
     protected abstract String resourceName();
 
-    /** Entity → DTO response. */
     protected abstract Resp toResponse(T entity);
 
-    /** Dựng entity mới từ request (chưa lưu). */
     protected abstract T createEntity(Req request);
 
-    /** Áp request lên entity đang có (update). */
+    /** Áp request lên entity. Không đổi cột mã nghiệp vụ. */
     protected abstract void updateEntity(T entity, Req request);
 
-    /** Xóa mềm: đặt is_deleted = true + deleted_at, KHÔNG xóa bản ghi. */
+    /** Xóa mềm: is_deleted = true + deleted_at. */
     protected abstract void softDelete(T entity);
 
-    /** Bật/tắt sử dụng: đặt is_active. */
     protected abstract void setActive(T entity, boolean active);
 
-    /**
-     * Truy vấn danh sách có lọc/sắp xếp/phân trang.
-     * Module con tự dựng Specification + dùng {@link PageMapper#toPageable}.
-     */
-    protected abstract Page<T> search(ListQuery query);
-
-    // ================= Hành vi dùng chung =================
+    /** Truy vấn danh sách. filters = filter riêng của module (rỗng đã bị loại). */
+    protected abstract Page<T> search(ListQuery query, Map<String, String> filters);
 
     @Transactional(readOnly = true)
-    public PageData<Resp> list(ListQuery query) {
-        return PageMapper.toPageData(search(query), this::toResponse);
+    public PageData<Resp> list(ListQuery query, Map<String, String> filters) {
+        PageData<Resp> page = PageMapper.toPageData(search(query, filters), this::toResponse);
+        log.debug("List {} -> {} items, filters={}", resourceName(), page.items().size(), filters);
+        return page;
     }
 
     @Transactional(readOnly = true)
@@ -72,22 +57,27 @@ public abstract class BaseCrudService<T, ID, Req, Resp> {
 
     @Transactional
     public Resp create(Req request) {
-        T entity = createEntity(request);
-        return toResponse(repository.save(entity));
+        T saved = repository.save(createEntity(request));
+        log.info("Tạo {} thành công", resourceName());
+        return toResponse(saved);
     }
 
     @Transactional
     public Resp update(ID id, Req request) {
         T entity = findOrThrow(id);
         updateEntity(entity, request);
-        return toResponse(repository.save(entity));
+        T saved = repository.save(entity);
+        log.info("Cập nhật {} id={} thành công", resourceName(), id);
+        return toResponse(saved);
     }
 
     @Transactional
     public Resp toggleActive(ID id, boolean active) {
         T entity = findOrThrow(id);
         setActive(entity, active);
-        return toResponse(repository.save(entity));
+        T saved = repository.save(entity);
+        log.info("Đổi trạng thái {} id={} -> {}", resourceName(), id, active ? "ACTIVE" : "INACTIVE");
+        return toResponse(saved);
     }
 
     @Transactional
@@ -95,9 +85,9 @@ public abstract class BaseCrudService<T, ID, Req, Resp> {
         T entity = findOrThrow(id);
         softDelete(entity);
         repository.save(entity);
+        log.info("Xóa mềm {} id={}", resourceName(), id);
     }
 
-    /** Tìm entity hoặc ném 1004. Module con gọi lại khi cần lấy entity thô. */
     protected T findOrThrow(ID id) {
         return repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(resourceName() + " không tồn tại"));
