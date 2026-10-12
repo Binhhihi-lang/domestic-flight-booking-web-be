@@ -52,10 +52,11 @@ class PageMapperTest {
         ListQuery query = new ListQuery();
         query.setSort("airline_name,desc");
 
-        Pageable pageable = PageMapper.toPageable(query, "airline_code", "airline_code", "airline_name");
+        Pageable pageable = PageMapper.toPageable(query, "airlineCode", "airline_code", "airline_name");
 
-        assertThat(pageable.getSort().getOrderFor("airline_name")).isNotNull();
-        assertThat(pageable.getSort().getOrderFor("airline_name").getDirection()).isEqualTo(Sort.Direction.DESC);
+        // Whitelist dùng tên field API (airline_name); Spring Data nhận tên property (airlineName)
+        assertThat(pageable.getSort().getOrderFor("airlineName")).isNotNull();
+        assertThat(pageable.getSort().getOrderFor("airlineName").getDirection()).isEqualTo(Sort.Direction.DESC);
     }
 
     @Test
@@ -63,9 +64,24 @@ class PageMapperTest {
         ListQuery query = new ListQuery();
         query.setSort("password_hash,asc");   // không nằm trong whitelist
 
-        Pageable pageable = PageMapper.toPageable(query, "airline_code", "airline_code", "airline_name");
+        Pageable pageable = PageMapper.toPageable(query, "airlineCode", "airline_code", "airline_name");
 
-        assertThat(pageable.getSort().getOrderFor("airline_code")).isNotNull();
+        assertThat(pageable.getSort().getOrderFor("airlineCode")).isNotNull();
         assertThat(pageable.getSort().getOrderFor("password_hash")).isNull();
+    }
+
+    @Test
+    void toPageable_chuyenSnakeCaseSangTenPropertyEntity() {
+        // Whitelist dùng tên field hợp đồng API (created_at), nhưng Spring Data cần
+        // tên property entity (createdAt). Sai chỗ này gây PropertyReferenceException
+        // "No property 'created' found for type 'User'" → 500.
+        ListQuery query = new ListQuery();
+        query.setSort("created_at,desc");
+
+        Pageable pageable = PageMapper.toPageable(query, "id", "email", "created_at");
+
+        assertThat(pageable.getSort().getOrderFor("createdAt")).isNotNull();
+        assertThat(pageable.getSort().getOrderFor("created_at")).isNull();
+        assertThat(pageable.getSort().getOrderFor("createdAt").getDirection()).isEqualTo(Sort.Direction.DESC);
     }
 }

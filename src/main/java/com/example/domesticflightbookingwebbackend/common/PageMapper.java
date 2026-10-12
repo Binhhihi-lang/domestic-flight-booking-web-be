@@ -43,6 +43,11 @@ public final class PageMapper {
     /**
      * Dựng {@link Pageable} từ {@link ListQuery}, dùng sort mặc định nếu sort
      * của client không nằm trong whitelist (BR-LIST-03: bỏ qua, không báo lỗi).
+     *
+     * <p>Whitelist dùng tên field theo HỢP ĐỒNG API (snake_case, ví dụ
+     * {@code created_at}), còn Spring Data cần tên property entity (camelCase,
+     * {@code createdAt}) — nên field hợp lệ được chuyển đổi trước khi dựng Sort.
+     * {@code defaultSortField} truyền thẳng tên property entity.
      */
     public static Pageable toPageable(ListQuery query, String defaultSortField, String... allowedSortFields) {
         int page = query.getPageOrDefault() - 1;   // API 1-based → Spring 0-based
@@ -52,8 +57,23 @@ public final class PageMapper {
             Sort.Direction direction = "desc".equals(query.getSortDirection())
                     ? Sort.Direction.DESC
                     : Sort.Direction.ASC;
-            return PageRequest.of(page, size, Sort.by(direction, query.getSortField()));
+            return PageRequest.of(page, size, Sort.by(direction, toEntityProperty(query.getSortField())));
         }
         return PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, defaultSortField));
+    }
+
+    /** {@code created_at} → {@code createdAt} (tên field API → property entity). */
+    private static String toEntityProperty(String apiField) {
+        StringBuilder sb = new StringBuilder(apiField.length());
+        boolean upperNext = false;
+        for (char c : apiField.toCharArray()) {
+            if (c == '_') {
+                upperNext = true;
+            } else {
+                sb.append(upperNext ? Character.toUpperCase(c) : c);
+                upperNext = false;
+            }
+        }
+        return sb.toString();
     }
 }

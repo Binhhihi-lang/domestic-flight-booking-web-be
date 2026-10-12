@@ -303,12 +303,13 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 | 0 | Hạ tầng dev (Docker Redis+Postgres, pom dep) | — | ✅ 12/10/2026 |
 | 1 | Migration V4→V9 + refactor entity/repo | 0 | ✅ 12/10/2026 |
 | 2 | Lớp nền common (ApiResponse, exception, BaseCrud) | 1 | ✅ 12/10/2026 |
-| 3 | Security + JWT + Redis token | 2 | ⬜ |
-| 4 | Auth & Account | 3 | ⬜ |
-| 5 | Profile + User Management + RBAC | 4 | ⬜ |
+| 3 | Security + JWT + Redis token | 2 | ✅ 12/10/2026 |
+| 4 | Auth & Account | 3 | ✅ 13/10/2026 |
+| 5 | Profile + User Management + RBAC | 4 | ✅ 13/10/2026 |
 | 6 | Master Data (Airline mẫu → 5 module) | 2 | ⬜ |
 | 7 | Promotion + Voucher + News | 6 | ⬜ |
 | 8 | Test, hardening, tài liệu | 4–7 | ⬜ |
+| + | **V10** — ảnh News/City/Promotion + `permissions.module` + 2 quyền mới | 1 | ✅ 12/10/2026 |
 
 **Cụm 6 chỉ phụ thuộc cụm 2** (không cần chờ Security) → có thể chạy song song với cụm 3–5 nếu cần tăng tốc.
 
@@ -331,6 +332,43 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 - `service/BaseCrudService<T,ID,Req,Resp>` + `controller/BaseCrudController<T,ID,Req,Resp>` — 6 hook cho module con (resourceName/toResponse/createEntity/updateEntity/softDelete/setActive/search). Thêm endpoint `PUT /{id}/active?value=` để toggle `is_active`.
 - **snake_case JSON**: Boot 4 dùng Jackson 3 (`tools.jackson`) — `Jackson2ObjectMapperBuilderCustomizer` **không còn**; dùng property `spring.jackson.property-naming-strategy=SNAKE_CASE` trong `application.properties` (đã thêm), không cần class Java.
 - **Đã verify:** `mvn test` → **19/19 pass** (ListQuery 8, PageMapper 5, GlobalExceptionHandler 5, placeholder 1). Test `contextLoads` cũ đổi thành placeholder vì `@SpringBootTest` cần DB+Redis thật.
+
+**Ghi chú Cụm 3 (12/10/2026):**
+- `entity/redis/`: `InvalidatedToken` (blacklist access token, key = jti), `RefreshToken` (whitelist, `@Indexed userId`), `CachedAuthorities` (cache quyền, TTL 300s) + 3 repo `CrudRepository` trong `repository/redis/`.
+- `security/`: `JwtService` (**HS256**, claim `sub`=userId, `email`, `roles`, `permissions`, `type`=access/refresh, `jti`), `UserDetailsServiceImpl` (đọc cache Redis → DB, user khóa/xóa mềm → authorities rỗng, KHÔNG cache kết quả rỗng), `SecurityUtils` (`getCurrentUserId` từ token — chặn IDOR).
+- `config/`: `CustomJwtDecoder` (check blacklist TRƯỚC khi verify chữ ký), `CustomJwtAuthenticationConverter` (đọc lại quyền từ DB/cache, không tin claim), `SecurityConfig` (stateless, permitAll auth + GET public, `@EnableMethodSecurity`, BCrypt), `JwtAuthenticationEntryPoint`→1002, `CustomAccessDeniedHandler`→1003, `CorsConfig`, `OpenApiConfig`, `DataInitializer` (tạo ADMIN đầu tiên + ví khi DB trống).
+- **Đã verify:** `mvn test` → **24/24 pass** (thêm 5 test `JwtServiceTest`); app start profile `local` OK, `DataInitializer` tạo `admin@flightbooking.local` (role ADMIN, is_active) + ví số dư 0; Redis kết nối được.
+- **Lưu ý Jackson 3 (Boot 4):** `spring.jackson.serialization.write-dates-as-timestamps` **không còn** → dùng `spring.jackson.datatype.datetime.write-dates-as-timestamps`. Sai key làm app **fail ngay khi start** (`No enum constant ...SerializationFeature.write-dates-as-timestamps`).
+- Mặc định tài khoản ADMIN đầu tiên: `admin@flightbooking.local` / `Admin@12345` (override bằng `app.admin.email`/`app.admin.password`).
+
+**Ghi chú V10 (12/10/2026) — bổ sung ngoài DB v0.4:**
+- Yêu cầu mới từ FE (merge nhánh `da`): `docs/De_xuat_bo_sung_DB_v0.5_truong_anh.md`. Phản hồi của BE ghi ở **mục 7** của chính file đó.
+- `V10__content_images_and_permission_module.sql`: (1) 5 cột ảnh/mô tả/nhãn — `news_items.thumbnail_url`, `cities.image_url`, `promotions.image_url`/`description`/`badge_label`; (2) `permissions.module VARCHAR(30)` + backfill 102 quyền theo tiền tố dài-nhất-khớp (→ 23 module); (3) seed `VOUCHER_CLAIM` + `WALLET_READ_SELF`, cấp CUSTOMER + ADMIN.
+- Entity cập nhật: `Permission` (+module), `NewsItem` (+thumbnailUrl), `City` (+imageUrl), `Promotion` (+imageUrl/description/badgeLabel).
+- **Đã verify:** V10 migrate OK trên Postgres local (104 quyền, 0 NULL module); `mvn compile` + `validate` pass.
+- **Phát hiện:** API v0.2 mục 2.4 **đã hứa** `module` từ trước nhưng schema chưa có — đây là lỗ hổng doc↔DB, nay đã khớp. Tương tự 2 quyền `VOUCHER_CLAIM`/`WALLET_READ_SELF` DB v0.4 A.3 yêu cầu nhưng V2 chưa seed.
+- **Không sửa docx v0.4** (quyết định của user) — delta sống ở file đề xuất + migration.
+
+**Ghi chú Cụm 4 (13/10/2026):**
+- `dto/request/auth/`: `RegisterRequest`, `LoginRequest`, `PasswordResetRequest`, `PasswordResetConfirmRequest`, `ChangePasswordRequest` (đều `record` + `@Valid`).
+- `dto/response/auth/`: `UserResponse`, `AuthenticatedUserResponse`, `LoginResponse`, `PasswordResetResponse`.
+- `mapper/UserMapper` — DB v0.4 (`is_active` boolean + `role_id` đơn) → hợp đồng API (`status` chuỗi ACTIVE/INACTIVE + `roles` mảng).
+- `service/AuthService` — register (tạo ví số dư 0 cùng transaction), login (1007 không phân biệt sai email/mật khẩu; INACTIVE → 1008), logout (blacklist jti + thu hồi refresh), refresh (xoay vòng, **giữ hạn tuyệt đối**), reset password (Redis TTL 15 phút, thu hồi token cũ, dùng 1 lần), change-password (thu hồi mọi refresh + evict cache quyền).
+- `controller/AuthController` — 7 endpoint: register/login/logout/refresh/password-reset request+confirm/change-password.
+- `entity/redis/PasswordResetToken` + repo (open item #2 chốt: **Redis TTL 15 phút**, không cần migration).
+- **Đã verify E2E thật (curl):** register→login→refresh→logout→token cũ bị từ chối. **11/11 case pass**: register 1000, trùng email 1005, login 1000, sai mật khẩu 1007, email lạ 1007 (không lộ), no-token 1002, path lạ 404, refresh 1000 (token mới khác cũ), logout 1000, token đã logout 1002, refresh cũ đã xoay 1002. Reset password 8/8 pass (chống dò tài khoản, token dùng 1 lần). Change-password 4/4 pass. `mvn test` → **25/25 pass**.
+- **BUG ĐÃ SỬA (phát hiện khi test):** `GlobalExceptionHandler` để `NoResourceFoundException` rơi vào handler `Exception` chung → path không tồn tại trả **500 thay vì 404**. Đã thêm handler map cả `NoHandlerFoundException` + `NoResourceFoundException` → 1004. Thêm unit test hồi quy.
+- **Lưu ý thiết kế:** đổi mật khẩu chỉ thu hồi **refresh token**, KHÔNG blacklist access token đang lưu hành (theo kế hoạch). Hệ quả: access token cũ còn hiệu lực tới khi hết hạn (mặc định 1 giờ). Muốn thu hồi ngay thì phải blacklist — chưa làm ở Phase 1.
+
+**Ghi chú Cụm 5 (13/10/2026):**
+- `config/CloudinaryConfig` + `service/CloudinaryService` (upload avatar, thư mục `flight-booking/avatars`, chỉ nhận `image/*`).
+- `service/ProfileService` + `controller/ProfileController` — GET/PUT `/profile` (whitelist `full_name`/`phone`/`avatar_url`), POST `/profile/avatar` (multipart).
+- `service/UserService` + `controller/UserController` — CRUD + soft delete + reset-password. Lọc `status`/`role`, keyword `email/full_name/phone`, sort whitelist `email`/`full_name`/`created_at` (dùng `Specification` + `JpaSpecificationExecutor`).
+- `service/RbacService` + `controller/RbacController` — `GET /roles` (mảng trần), `GET /permissions` (keyword/module/sort), read-only.
+- DTO: `dto/request/profile/*`, `dto/request/user/*`, `dto/response/rbac/*`, `dto/response/user/ResetPasswordResponse`.
+- BR đã cài: chặn ADMIN tự hạ quyền/xóa nếu là ADMIN ACTIVE **cuối cùng** → 1006; đổi role/khóa user → **evict cache quyền** (hiệu lực ngay) + thu hồi refresh token; DELETE = soft delete (`is_active=false` + `is_deleted=true`).
+- **BUG ĐÃ SỬA (phát hiện khi test):** `PageMapper.toPageable` truyền thẳng tên field API (snake_case `created_at`) vào `Sort.by` của Spring Data → `PropertyReferenceException: No property 'created' found` → **500**. Đã thêm chuyển đổi snake_case → camelCase; `defaultSortField` giờ truyền tên property entity (`createdAt`). Thêm test hồi quy.
+- **Đã verify E2E thật (curl):** 21 case pass — profile GET/PUT + no-token 1002; roles trả 3 role; permissions `?module=AUTH` trả 5; user CRUD (create STAFF 1000, role sai 1001, trùng email 1005, list có pagination, sort `created_at,desc` 1000, filter `status`+`role` 1000, update 1000, reset-password 1000, delete soft 1000, GET sau xóa 1004); chặn tự hạ quyền ADMIN cuối 1006; **cache quyền evict hiệu lực ngay** (STAFF bị hạ xuống CUSTOMER → token cũ gọi `/users` trả 1003). `mvn test` → **26/26 pass**.
 
 ---
 
