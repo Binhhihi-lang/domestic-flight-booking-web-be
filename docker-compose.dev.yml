@@ -1,0 +1,31 @@
+# Hạ tầng dev — CHỈ chạy Redis + Postgres, không chạy backend/frontend (dev chạy bằng IDE).
+#
+#   docker compose -f docker-compose.dev.yml up -d       # bật
+#   docker compose -f docker-compose.dev.yml down        # tắt (giữ volume)
+#   docker compose -f docker-compose.dev.yml down -v     # tắt + xóa data (reset sạch)
+
+services:
+  redis:
+    image: redis:7.2-alpine
+    container_name: flight_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  # CHỈ để test migration local, không phải DB thật (DB thật là Aiven).
+  postgres:
+    image: postgres:18-alpine
+    container_name: flight_pg_local
+    environment:
+      POSTGRES_DB: flightbooking
+      POSTGRES_USER: flight
+      POSTGRES_PASSWORD: flight
+    ports:
+      - "5433:5432"
+    volumes:
+      # Postgres 18+ dùng layout /var/lib/postgresql (data nằm trong subdir version-specific)
+      - flight_pg_data:/var/lib/postgresql
+    restart: unless-stopped
+
+volumes:
+  flight_pg_data:

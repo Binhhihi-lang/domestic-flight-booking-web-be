@@ -1,0 +1,1026 @@
+DATABASE DESIGN — DOMESTIC FLIGHT BOOKING WEB
+Phiên bản 0.4 — Bản bổ sung sơ đồ ghế, giá theo loại hành khách và điều kiện khuyến mãi / voucher
+Công nghệ: Spring Boot 4.1.1 / Spring Data JPA / PostgreSQL / Flyway
+Ngày cập nhật: 11/10/2026 · Phạm vi: Phase 1–3
+Tài liệu này thay thế v0.3. Gồm 36 bảng (thêm 1 bảng mới so với v0.3: voucher_excluded_flights); mỗi bảng có tên, giải thích, mục đích tạo, danh sách thuộc tính và ghi chú ràng buộc; một số bảng có ví dụ dữ liệu để dễ hình dung. Trong bảng thuộc tính, các dòng tô vàng có nhãn “mới v0.4” / “sửa v0.4” là điểm khác so với v0.3. Các thay đổi của v0.3 so với v0.2 (tên cũ → tên mới) vẫn được giữ ở mục 1.3 và 1.4 vì database đang chạy (V1–V3) còn ở cấu trúc v0.2 và cần chúng để viết migration.
+1. Tóm tắt thay đổi
+1.1 Thay đổi của v0.4 so với v0.3
+---TABLE---
+# | Nội dung thay đổi | Bảng liên quan | Nguồn
+1 | Sơ đồ ghế máy bay: seat_types cho CRUD đầy đủ (thêm is_active, is_deleted, deleted_at, created_at/updated_at). aircraft_seats không CRUD từng ghế mà quản lý cả sơ đồ ngay trong trang chi tiết phi cơ: khai báo theo khối, xem trước, lưu thay thế toàn bộ trong một transaction; khóa không cho sửa khi phi cơ đã có flight_seats. | seat_types, aircraft_seats, aircrafts, flights | Thảo luận
+2 | Giá theo loại hành khách set cứng: flight_fares chỉ nhập giá người lớn (bỏ cột passenger_type). Giá trẻ em = 75%, em bé = 10% giá người lớn (đã gồm thuế phí), đặt trong application.yml, không theo hãng. | flight_fares | Theo yêu cầu
+3 | Khuyến mãi chỉ áp cho hành khách ADULT và CHILD; INFANT không được giảm. Voucher dùng cùng quy tắc (cơ sở tính voucher không gồm dòng INFANT). | promotions, vouchers | Đề xuất, đã đồng ý
+4 | Thêm trần giảm (max_discount_amount, tính cho mỗi dòng vé) và giá vé tối thiểu (min_fare_amount) cho khuyến mãi. Điều kiện của khuyến mãi phải đánh giá được trên một dòng vé vì giá giảm hiển thị ngay lúc tìm chuyến. | promotions | Theo yêu cầu
+5 | Thêm applicable_trip_type (ANY / ONE_WAY / ROUND_TRIP) cho khuyến mãi và voucher. Là điều kiện của cả booking nên không đặt trong *_scopes. ROUTE có hướng: khuyến mãi khứ hồi cần thêm dòng ROUTE đảo chiều. | promotions, vouchers, promotion_scopes, voucher_scopes | Theo yêu cầu
+6 | Voucher đổi min_order_value thành min_order_amount cho đúng quy ước số tiền kết thúc bằng _amount. | vouchers | Rà soát
+7 | Giữ khóa chính đặt tên id kiểu BIGINT IDENTITY, không dùng UUID; mã hiển thị ra ngoài (booking_code, ticket_code) là mã riêng. Ghi rõ lý do ở mục 2.2. | toàn bộ | Thảo luận
+8 | Mục 6 đổi thành “Giả định đã chốt” (đồng ý theo mặc định) và thêm giả định 13–17 cho các điểm mới. | mục 6 | Theo yêu cầu
+9 | Thêm bảng voucher_excluded_flights (đối xứng với promotion_excluded_flights): loại trừ chuyến bay khỏi voucher, dùng chung quy tắc “loại trừ luôn thắng phạm vi”. | vouchers, voucher_scopes | Rà soát, đã đồng ý
+10 | Bảng notifications chưa triển khai giai đoạn này: không tạo bảng trong migration, giữ mô tả trong tài liệu để làm chức năng thông báo sau. | notifications | Đã đồng ý
+---END---
+Số bảng: v0.3 có 35 bảng; v0.4 có 36 bảng (thêm voucher_excluded_flights). Bảng notifications chưa triển khai giai đoạn này (giữ mô tả để làm sau) nên phần DB dựng ngay còn 35 bảng.
+1.2 Thay đổi của v0.3 so với v0.2 (giữ lại để viết migration)
+---TABLE---
+# | Nội dung thay đổi | Bảng liên quan | Nguồn
+1 | Phương án A: gộp voucher_usages vào user_vouchers (thêm booking_id, discount_amount), bỏ voucher_usages và cột per_user_limit. | user_vouchers, vouchers, voucher_usages (bỏ) | Theo yêu cầu
+2 | Voucher có 2 cách phát: GLOBAL (toàn hệ thống, khách bấm Nhận) và ASSIGNED (ADMIN tặng riêng). Khách không nhập mã; chọn voucher từ “Voucher của tôi”. Thêm tên và mô tả voucher để hiển thị. | vouchers, user_vouchers | Theo yêu cầu
+3 | Thuế và phí gộp thành một cột tax_fee. Khuyến mãi tính trên giá vé đã gồm thuế phí, voucher tính sau khuyến mãi. | flight_fares, bookings, booking_segments | Theo yêu cầu
+4 | Thêm phạm vi áp dụng và loại trừ cho khuyến mãi / voucher theo mẫu LaptopShop: promotion_scopes, promotion_excluded_flights, voucher_scopes. | promotions, vouchers (3 bảng mới) | Theo yêu cầu
+5 | Đổi seat_configurations thành aircraft_seats và giải thích rõ: mỗi dòng là 1 ghế, 1 máy bay chỉ có 1 sơ đồ ghế. | aircraft_seats, flight_seats | Theo yêu cầu
+6 | Rà lại tên bảng và tên cột cho dễ hiểu, thống nhất quy ước đặt tên (mục 2, 1.3, 1.4). | nhiều bảng | Theo yêu cầu
+7 | bookings lưu bảng giá chi tiết (giá vé, khuyến mãi, voucher, phụ thu ghế, hành lý, tổng) để đọc một dòng là hiểu khách trả bao nhiêu; seat_holds lưu phụ thu ghế lúc đặt; flight_seats.seat_surcharge mặc định 0. | bookings, seat_holds, flight_seats | Bổ sung
+8 | Voucher có trạng thái RESERVED (đang gắn với booking chờ thanh toán) vì booking được tạo trước khi thanh toán. | user_vouchers | Bổ sung
+---END---
+Số bảng: v0.2 có 33 bảng; v0.3 = 33 − 1 (voucher_usages) + 3 (promotion_scopes, promotion_excluded_flights, voucher_scopes) = 35 bảng.
+1.3 Bảng đổi tên hoặc bị bỏ (v0.2 → v0.3)
+---TABLE---
+Tên cũ | Tên mới | Lý do
+seat_configurations | aircraft_seats | Tên cũ dễ hiểu nhầm là “một máy bay có nhiều cấu hình ghế”. Thực tế mỗi dòng là một ghế của máy bay, nên gọi là aircraft_seats (ghế của máy bay).
+booking_flights | booking_segments | Tên cũ dễ lẫn với bảng flights. Mỗi dòng là một chặng (segment) của booking, khớp với cột segment_order.
+voucher_usages | (bỏ) | Gộp vào user_vouchers (phương án A): mỗi lần dùng chính là một dòng ví chuyển sang USED, kèm booking_id và discount_amount.
+---END---
+1.4 Cột đổi tên (v0.2 → v0.3)
+---TABLE---
+Bảng | Tên cũ | Tên mới | Lý do
+seat_types | type_code, type_name | seat_type_code, seat_type_name | Đồng nhất với airline_code, city_code...
+fare_classes | class_code, class_name | fare_class_code, fare_class_name | Tránh nhầm với “class” của Java; đồng nhất cách đặt tên
+aircraft_seats | row_number, column_code | seat_row, seat_column | row_number trùng tên hàm ROW_NUMBER của SQL; nói rõ là hàng/cột của ghế
+promotions | promo_code, promo_name | promotion_code, promotion_name | Viết đầy đủ, đồng nhất với tên bảng
+vouchers | scope | distribution_type | Cách phát voucher (toàn hệ thống / tặng riêng); tên cũ trùng ý với voucher_scopes
+vouchers | voucher_type, value_amount | discount_type, discount_value | Giống tên cột của promotions
+vouchers | usage_limit | claim_limit | Giờ giới hạn đếm số lượt NHẬN voucher
+user_vouchers | assigned_at | received_at | Nhận bằng cách bấm Nhận cũng được tính, không chỉ được cấp
+flights | status | operation_status | Đi cặp rõ ràng với sales_status
+flights | base_flight_id | parent_flight_id | Chuyến bổ sung trỏ về chuyến gốc (cha)
+flight_seats | seat_config_id | aircraft_seat_id | Theo tên bảng mới aircraft_seats
+flight_seats | price_at_time | seat_surcharge | Đây là phụ thu chọn ghế; tên cũ khó hiểu
+fare_rules | refund_cutoff_hours | refund_min_hours_before_departure | Nói rõ: hủy trước giờ bay ít nhất bao nhiêu giờ mới được hoàn
+flight_fares | tax, fee | tax_fee | Gộp thuế và phí một cột theo yêu cầu
+bookings | snapshot_currency | currency | Gọn hơn
+bookings | expires_at | payment_expires_at | Nói rõ là hạn thanh toán / giữ ghế
+bookings | refund_percent_snapshot | applied_refund_percent | Phần trăm hoàn đã áp dụng lúc hủy
+booking_segments | price_snapshot | fare_amount_at_booking | Nói rõ là giá vé gốc tại thời điểm đặt
+booking_baggages | price_snapshot | unit_price_at_booking | Nói rõ là giá một gói tại thời điểm đặt
+seat_holds | held_until | hold_expires_at | Theo quy ước *_expires_at
+payments | provider, gateway_ref | gateway_name, gateway_transaction_id | Nói rõ là tên cổng và mã giao dịch của cổng
+e_tickets | booking_flight_id | booking_segment_id | Theo tên bảng mới booking_segments
+wallet_transactions | type | transaction_type | Tránh tên quá chung chung
+---END---
+Hai điều chỉnh của v0.4 không cần bước đổi tên riêng trong migration: cột vouchers.min_order_value (cột mới của v0.3) được tạo thẳng với tên min_order_amount; flight_fares được dựng không có passenger_type (giá cũ chỉ giữ dòng ADULT khi backfill). Lý do: các migration V4 trở đi chưa chạy.
+2. Nguyên tắc thiết kế và đặt tên
+Phần này giải thích các quy ước dùng xuyên suốt, để khi đọc lại từng bảng bạn đoán được ý nghĩa cột chỉ từ tên.
+2.1 Quy ước đặt tên
+Tên bảng: danh từ số nhiều, snake_case (users, flights). Bảng nối hai bảng khác ghép tên hai bảng (role_permissions).
+Khóa chính: luôn đặt tên là id ở mọi bảng. Khóa ngoại: tên bảng số ít + _id (airline_id, flight_id). Khi một bảng trỏ tới cùng bảng hai lần thì thêm vai trò (departure_airport_id, arrival_airport_id).
+Thời điểm: kết thúc bằng _at (created_at, paid_at, payment_expires_at). Ngày thuần: kết thúc bằng _date (start_date).
+Cờ đúng/sai: bắt đầu bằng is_ (is_active, is_deleted, is_read).
+Số tiền: kết thúc bằng _amount (discount_amount, refund_amount, min_order_amount). Giá được chụp lại lúc đặt vé: kết thúc bằng _at_booking (fare_amount_at_booking).
+Trạng thái: status khi bảng có một trạng thái; <loại>_status khi có nhiều (operation_status và sales_status của flights).
+2.2 Quy ước kỹ thuật
+Khóa chính: mọi bảng dùng id BIGINT GENERATED BY DEFAULT AS IDENTITY; bảng trung gian dùng khóa chính ghép.
+Vì sao giữ tên id và BIGINT (không UUID): id là tên mặc định của Spring Data JPA, khóa ngoại vẫn rõ nghĩa nhờ có tên bảng đứng trước (users.id ↔ bookings.user_id), và V1–V3 đã chạy với id. BIGINT nhỏ và index nhanh hơn UUID. Mặt yếu của BIGINT là id đoán được, nên mọi API phải kiểm tra quyền sở hữu (ví dụ booking.user_id phải bằng người đang đăng nhập); những thứ lộ ra ngoài và nhạy cảm đã có mã riêng (booking_code, ticket_code). Nếu sau này cần UUID thì dùng UUIDv7 (có thứ tự thời gian) để index không bị phân mảnh.
+Enum: lưu VARCHAR kèm CHECK thay vì kiểu enum của PostgreSQL, vì thêm giá trị mới chỉ cần sửa CHECK; phía Java dùng @Enumerated(STRING).
+Thời gian: TIMESTAMPTZ cho mọi mốc thời gian để tránh lệch múi giờ; DATE chỉ dùng cho ngày thuần.
+Tiền tệ: NUMERIC(12,2) kèm mã tiền VND. Không dùng float/double cho tiền.
+Giá theo loại hành khách: chỉ lưu giá người lớn trong flight_fares; giá trẻ em và em bé tính bằng tỉ lệ cố định cấu hình trong application.yml (mục 5.3), không có bảng riêng.
+Snapshot giá: giá vé, phụ thu, hành lý, khuyến mãi và quy định hoàn vé được chụp vào bảng booking khi đặt, để đổi giá hay đổi rule sau này không làm sai vé cũ.
+Active và Soft Delete: là hai thứ khác nhau. is_active là bật/tắt sử dụng; is_deleted + deleted_at là xóa mềm, vẫn giữ lịch sử. Dữ liệu giao dịch không bao giờ xóa cứng.
+Unique khi có Soft Delete: các cột mã (email, airline_code...) dùng partial unique index WHERE is_deleted = false.
+Chống ghi đè đồng thời: flight_seats và wallets có cột version (khóa lạc quan); giữ ghế và nhận voucher dùng UPDATE có điều kiện.
+3. Danh sách bảng
+3.0 Bảng tổng hợp
+---TABLE---
+# | Tên bảng | Nhóm | So với v0.3
+1 | users | A — XÁC THỰC & PHÂN QUYỀN (RBAC) | GIỮ NGUYÊN
+2 | roles | A — XÁC THỰC & PHÂN QUYỀN (RBAC) | GIỮ NGUYÊN
+3 | permissions | A — XÁC THỰC & PHÂN QUYỀN (RBAC) | GIỮ NGUYÊN
+4 | role_permissions | A — XÁC THỰC & PHÂN QUYỀN (RBAC) | GIỮ NGUYÊN
+5 | airlines | B — DỮ LIỆU NỀN (MASTER DATA) | GIỮ NGUYÊN
+6 | cities | B — DỮ LIỆU NỀN (MASTER DATA) | GIỮ NGUYÊN
+7 | airports | B — DỮ LIỆU NỀN (MASTER DATA) | GIỮ NGUYÊN
+8 | aircrafts | B — DỮ LIỆU NỀN (MASTER DATA) | SỬA (CHỈ GHI CHÚ)
+9 | seat_types | B — DỮ LIỆU NỀN (MASTER DATA) | SỬA
+10 | aircraft_seats | B — DỮ LIỆU NỀN (MASTER DATA) | SỬA (CHỈ GHI CHÚ)
+11 | promotions | B — DỮ LIỆU NỀN (MASTER DATA) | SỬA
+12 | promotion_scopes | B — DỮ LIỆU NỀN (MASTER DATA) | SỬA (CHỈ GHI CHÚ)
+13 | promotion_excluded_flights | B — DỮ LIỆU NỀN (MASTER DATA) | GIỮ NGUYÊN
+14 | vouchers | B — DỮ LIỆU NỀN (MASTER DATA) | SỬA
+15 | voucher_scopes | B — DỮ LIỆU NỀN (MASTER DATA) | SỬA (CHỈ GHI CHÚ)
+16 | voucher_excluded_flights | B — DỮ LIỆU NỀN (MASTER DATA) | MỚI
+17 | user_vouchers | B — DỮ LIỆU NỀN (MASTER DATA) | GIỮ NGUYÊN
+18 | news_categories | B — DỮ LIỆU NỀN (MASTER DATA) | GIỮ NGUYÊN
+19 | news_items | B — DỮ LIỆU NỀN (MASTER DATA) | GIỮ NGUYÊN
+20 | news_category_mapping | B — DỮ LIỆU NỀN (MASTER DATA) | GIỮ NGUYÊN
+21 | flights | C — CHUYẾN BAY & GIÁ VÉ (FLIGHT & FARE) | SỬA (CHỈ GHI CHÚ)
+22 | fare_classes | C — CHUYẾN BAY & GIÁ VÉ (FLIGHT & FARE) | GIỮ NGUYÊN
+23 | fare_rules | C — CHUYẾN BAY & GIÁ VÉ (FLIGHT & FARE) | GIỮ NGUYÊN
+24 | flight_fares | C — CHUYẾN BAY & GIÁ VÉ (FLIGHT & FARE) | SỬA
+25 | flight_seats | C — CHUYẾN BAY & GIÁ VÉ (FLIGHT & FARE) | GIỮ NGUYÊN
+26 | baggage_options | D — ĐẶT VÉ, THANH TOÁN & VÉ ĐIỆN TỬ | GIỮ NGUYÊN
+27 | bookings | D — ĐẶT VÉ, THANH TOÁN & VÉ ĐIỆN TỬ | GIỮ NGUYÊN
+28 | booking_segments | D — ĐẶT VÉ, THANH TOÁN & VÉ ĐIỆN TỬ | GIỮ NGUYÊN
+29 | passengers | D — ĐẶT VÉ, THANH TOÁN & VÉ ĐIỆN TỬ | GIỮ NGUYÊN
+30 | seat_holds | D — ĐẶT VÉ, THANH TOÁN & VÉ ĐIỆN TỬ | GIỮ NGUYÊN
+31 | booking_baggages | D — ĐẶT VÉ, THANH TOÁN & VÉ ĐIỆN TỬ | GIỮ NGUYÊN
+32 | payments | D — ĐẶT VÉ, THANH TOÁN & VÉ ĐIỆN TỬ | GIỮ NGUYÊN
+33 | e_tickets | D — ĐẶT VÉ, THANH TOÁN & VÉ ĐIỆN TỬ | GIỮ NGUYÊN
+34 | wallets | E — VÍ KHÁCH HÀNG (WALLET) | GIỮ NGUYÊN
+35 | wallet_transactions | E — VÍ KHÁCH HÀNG (WALLET) | GIỮ NGUYÊN
+36 | notifications | F — THÔNG BÁO (NOTIFICATION) | CHƯA TRIỂN KHAI
+---END---
+Bảng bị bỏ (từ v0.3): voucher_usages (gộp vào user_vouchers).
+3.1 NHÓM A — XÁC THỰC & PHÂN QUYỀN (RBAC)
+Quản lý ai được đăng nhập và được làm gì. Mỗi user có đúng 1 role (roles 1—N users); quyền chi tiết nằm ở role_permissions.
+A.1  users
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Tài khoản của mọi loại người dùng trong hệ thống (CUSTOMER, STAFF, ADMIN).
+Mục đích tạo: Lưu thông tin đăng nhập, hồ sơ cá nhân và role của từng người. Mọi bảng nghiệp vụ (bookings, wallets, user_vouchers, notifications...) đều tham chiếu về đây để biết dữ liệu thuộc về ai.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+email | VARCHAR(255) | NOT NULL, UNIQUE (chỉ tính bản ghi chưa xóa mềm) | Email đăng nhập
+password_hash | VARCHAR(255) | NOT NULL | Mật khẩu đã băm (BCrypt), không lưu mật khẩu gốc
+full_name | VARCHAR(150) | NOT NULL | Họ tên
+phone | VARCHAR(20) | NULL | Số điện thoại
+avatar_url | TEXT | NULL | Link ảnh đại diện (Cloudinary)
+role_id | BIGINT | NOT NULL, FK → roles.id | Role duy nhất của user (thay cho bảng user_roles của v0)
+is_active | BOOLEAN | NOT NULL, DEFAULT true | Đang được phép sử dụng hay đã tắt (bật/tắt ngay trong chức năng Cập nhật)
+is_deleted | BOOLEAN | NOT NULL, DEFAULT false | Đã xóa mềm chưa (true = đã xóa mềm, dữ liệu lịch sử vẫn giữ)
+deleted_at | TIMESTAMPTZ | NULL | Thời điểm xóa mềm
+created_at / updated_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+Ghi chú / ràng buộc thêm:
+Chỉ ADMIN và STAFF được vào khu vực quản trị; CUSTOMER chỉ dùng khu vực khách hàng (kiểm tra bằng role trong JWT).
+Role thay đổi trong UC Update User; user không tự đổi role của mình.
+Email unique dùng partial unique index (WHERE is_deleted = false) để email của tài khoản đã xóa mềm không chặn đăng ký lại.
+Khi đăng ký CUSTOMER, hệ thống tạo luôn 1 dòng trong wallets (ví) cho user đó.
+A.2  roles
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Danh mục role cố định của hệ thống: ADMIN, STAFF, CUSTOMER.
+Mục đích tạo: Gom nhóm quyền theo vai trò. MVP dùng Fixed Role, nên bảng này chỉ được seed bằng migration và chỉ cho xem, không có chức năng tạo/sửa/xóa.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+name | VARCHAR(50) | NOT NULL, UNIQUE | Tên role: ADMIN / STAFF / CUSTOMER
+description | VARCHAR(255) | NULL | Mô tả role
+---END---
+Ghi chú / ràng buộc thêm:
+Quan hệ: 1 role có nhiều user (1—N). Một user chỉ thuộc 1 role.
+A.3  permissions
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Danh mục quyền chi tiết (permission catalog), ví dụ USER_READ, FLIGHT_CREATE.
+Mục đích tạo: Là đơn vị nhỏ nhất để kiểm tra quyền ở API. Khớp với Permission Matrix. Danh mục được seed sẵn và chỉ đọc.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+permission_key | VARCHAR(100) | NOT NULL, UNIQUE | Mã quyền, ví dụ USER_READ
+description | VARCHAR(255) | NULL | Mô tả quyền
+---END---
+Ghi chú / ràng buộc thêm:
+Cần seed thêm 2 quyền mới: VOUCHER_CLAIM (nhận voucher) và WALLET_READ_SELF (xem ví của mình), cấp cho CUSTOMER.
+A.4  role_permissions
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Bảng trung gian gán permission cho role (N—N).
+Mục đích tạo: Cho biết mỗi role có những quyền nào. Khi đăng nhập, backend đọc bảng này để nhét danh sách permission vào JWT.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+role_id | BIGINT | PK, FK → roles.id | Role
+permission_id | BIGINT | PK, FK → permissions.id | Permission được cấp cho role
+---END---
+Ghi chú / ràng buộc thêm:
+Khóa chính ghép (role_id, permission_id) để không gán trùng.
+3.2 NHÓM B — DỮ LIỆU NỀN (MASTER DATA)
+Dữ liệu danh mục do ADMIN quản lý ở Phase 1: hãng bay, thành phố, sân bay, máy bay và ghế máy bay, khuyến mãi, voucher, tin tức.
+B.1  airlines
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Danh sách hãng hàng không.
+Mục đích tạo: Để mỗi chuyến bay biết do hãng nào khai thác; hiển thị logo và tên hãng khi khách tìm chuyến; dùng làm phạm vi cho khuyến mãi/voucher theo hãng.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+airline_code | VARCHAR(10) | NOT NULL, UNIQUE | Mã hãng, ví dụ VN, VJ
+airline_name | VARCHAR(150) | NOT NULL | Tên hãng
+country | VARCHAR(100) | NULL | Quốc gia
+logo_url | VARCHAR(500) | NULL | Link logo
+is_active | BOOLEAN | NOT NULL, DEFAULT true | Đang được phép sử dụng hay đã tắt (bật/tắt ngay trong chức năng Cập nhật)
+is_deleted | BOOLEAN | NOT NULL, DEFAULT false | Đã xóa mềm chưa (true = đã xóa mềm, dữ liệu lịch sử vẫn giữ)
+deleted_at | TIMESTAMPTZ | NULL | Thời điểm xóa mềm
+created_at / updated_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+B.2  cities
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Danh sách thành phố.
+Mục đích tạo: Gom sân bay theo thành phố để khách tìm chuyến theo tên thành phố (một thành phố có thể có nhiều sân bay).
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+city_code | VARCHAR(10) | NOT NULL, UNIQUE | Mã thành phố
+city_name | VARCHAR(100) | NOT NULL | Tên thành phố
+country | VARCHAR(100) | NOT NULL | Quốc gia
+is_active | BOOLEAN | NOT NULL, DEFAULT true | Đang được phép sử dụng hay đã tắt (bật/tắt ngay trong chức năng Cập nhật)
+is_deleted | BOOLEAN | NOT NULL, DEFAULT false | Đã xóa mềm chưa (true = đã xóa mềm, dữ liệu lịch sử vẫn giữ)
+deleted_at | TIMESTAMPTZ | NULL | Thời điểm xóa mềm
+created_at / updated_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+B.3  airports
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Danh sách sân bay, mỗi sân bay thuộc 1 thành phố.
+Mục đích tạo: Làm điểm đi / điểm đến của chuyến bay và là cơ sở để xác định “tuyến bay” (ví dụ HAN → SGN) cho khuyến mãi/voucher theo tuyến.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+airport_code | VARCHAR(10) | NOT NULL, UNIQUE | Mã sân bay (IATA), ví dụ HAN, SGN
+airport_name | VARCHAR(150) | NOT NULL | Tên sân bay
+city_id | BIGINT | NOT NULL, FK → cities.id | Thành phố của sân bay
+latitude | DECIMAL(9,6) | NULL | Vĩ độ
+longitude | DECIMAL(9,6) | NULL | Kinh độ
+is_active | BOOLEAN | NOT NULL, DEFAULT true | Đang được phép sử dụng hay đã tắt (bật/tắt ngay trong chức năng Cập nhật)
+is_deleted | BOOLEAN | NOT NULL, DEFAULT false | Đã xóa mềm chưa (true = đã xóa mềm, dữ liệu lịch sử vẫn giữ)
+deleted_at | TIMESTAMPTZ | NULL | Thời điểm xóa mềm
+created_at / updated_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+B.4  aircrafts
+So với v0.3: SỬA (CHỈ GHI CHÚ)
+Giải thích: Danh sách máy bay (phi cơ) có thể điều cho chuyến bay.
+Mục đích tạo: Là nguồn để biết sức chứa và sơ đồ ghế. Một chuyến bay dùng đúng 1 máy bay (flights.aircraft_id); sơ đồ ghế của máy bay nằm ở bảng aircraft_seats và được cấu hình ngay trong trang chi tiết phi cơ (mục 5.7).
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+aircraft_code | VARCHAR(30) | NOT NULL, UNIQUE | Mã máy bay (số đăng ký / tail number)
+model | VARCHAR(100) | NOT NULL | Dòng máy bay, ví dụ A320
+manufacturer | VARCHAR(100) | NULL | Nhà sản xuất
+seat_capacity | INT | NOT NULL, CHECK > 0 | Sức chứa (tổng số ghế)
+is_active | BOOLEAN | NOT NULL, DEFAULT true | Đang được phép sử dụng hay đã tắt (bật/tắt ngay trong chức năng Cập nhật)
+is_deleted | BOOLEAN | NOT NULL, DEFAULT false | Đã xóa mềm chưa (true = đã xóa mềm, dữ liệu lịch sử vẫn giữ)
+deleted_at | TIMESTAMPTZ | NULL | Thời điểm xóa mềm
+created_at / updated_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+Ghi chú / ràng buộc thêm:
+seat_capacity phải bằng số dòng của máy bay này trong aircraft_seats; service kiểm tra khi ADMIN lưu sơ đồ ghế.
+Quy trình 2 bước: tạo phi cơ trước (có seat_capacity), sau đó cấu hình sơ đồ ghế ở tab “Sơ đồ ghế” của trang chi tiết. Phi cơ chưa có sơ đồ đủ ghế thì chưa được chọn cho chuyến bay.
+B.5  seat_types
+So với v0.3: SỬA
+Giải thích: Danh mục loại ghế (ghế thường, ghế cạnh cửa sổ, ghế thương gia...).
+Mục đích tạo: Phân loại ghế theo hạng để gắn vào sơ đồ ghế máy bay và để so khớp với hạng vé (fare class) khách chọn. Là danh mục nhỏ nên ADMIN CRUD bình thường như các bảng master khác.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+seat_type_code | VARCHAR(30) | NOT NULL, UNIQUE (chỉ tính bản ghi chưa xóa mềm) | Mã loại ghế (đổi tên từ type_code cho đồng nhất với airline_code, city_code...)
+seat_type_name | VARCHAR(100) | NOT NULL | Tên loại ghế (đổi tên từ type_name)
+seat_class | VARCHAR(20) | NOT NULL, CHECK IN (ECONOMY, BUSINESS, FIRST) | Hạng ghế
+is_active  mới v0.4 | BOOLEAN | NOT NULL, DEFAULT true | Đang được phép sử dụng hay đã tắt. Tắt thì không chọn được khi cấu hình sơ đồ ghế mới
+is_deleted  mới v0.4 | BOOLEAN | NOT NULL, DEFAULT false | Đã xóa mềm chưa (true = đã xóa mềm, dữ liệu lịch sử vẫn giữ)
+deleted_at  mới v0.4 | TIMESTAMPTZ | NULL | Thời điểm xóa mềm
+created_at / updated_at  mới v0.4 | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+Ghi chú / ràng buộc thêm:
+Loại ghế đang được aircraft_seats sử dụng thì không cho xóa mềm, chỉ cho tắt is_active (ghế đã có trên sơ đồ vẫn giữ nguyên loại).
+seat_type_code unique bằng partial unique index (WHERE is_deleted = false), giống các bảng master khác.
+B.6  aircraft_seats
+So với v0.3: SỬA (CHỈ GHI CHÚ)
+Giải thích: Sơ đồ ghế của máy bay. Mỗi dòng là MỘT GHẾ vật lý (hàng + cột + loại ghế). Tất cả các dòng của cùng một máy bay ghép lại thành MỘT sơ đồ ghế duy nhất của máy bay đó.
+Mục đích tạo: Là bản mẫu để sinh ra flight_seats khi tạo Seat Inventory cho một chuyến bay. Không CRUD từng ghế bằng từng form: ADMIN cấu hình cả sơ đồ trong trang chi tiết phi cơ (mục 5.7). Đổi tên từ seat_configurations vì tên cũ dễ hiểu nhầm là “một máy bay có nhiều cấu hình ghế”.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+aircraft_id | BIGINT | NOT NULL, FK → aircrafts.id | Máy bay có ghế này
+seat_type_id | BIGINT | NOT NULL, FK → seat_types.id | Loại ghế
+seat_row | INT | NOT NULL, CHECK > 0 | Số hàng ghế (đổi tên từ row_number, vì trùng tên hàm ROW_NUMBER của SQL)
+seat_column | VARCHAR(2) | NOT NULL | Ký hiệu cột ghế: A, B, C... (đổi tên từ column_code)
+---END---
+Ghi chú / ràng buộc thêm:
+UNIQUE (aircraft_id, seat_row, seat_column): không có 2 ghế trùng vị trí trên cùng một máy bay.
+Quan hệ: 1 máy bay — N ghế (N = seat_capacity). Quan hệ “máy bay — sơ đồ ghế” là 1—1: sơ đồ chính là tập hợp các dòng ghế.
+Mã ghế hiển thị (ví dụ 12A) được ghép từ seat_row + seat_column khi sinh flight_seats.
+Ghi cả sơ đồ trong một transaction (xóa các dòng cũ rồi ghi dòng mới), không sửa lẻ từng ghế qua API riêng.
+Chỉ được ghi lại sơ đồ khi máy bay CHƯA có dòng flight_seats nào trỏ tới. Lý do: flight_seats không lưu loại ghế riêng mà lấy từ aircraft_seats, nên sửa sơ đồ sẽ làm đổi ghế của chuyến đang bán.
+Ví dụ dữ liệu: Máy bay A320 mã VN-A001 (180 ghế) có 180 dòng như sau (trích 4 dòng):
+---TABLE---
+aircraft_id | seat_row | seat_column | seat_type_id (loại ghế)
+1 (VN-A001) | 1 | A | Thương gia
+1 (VN-A001) | 1 | B | Thương gia
+1 (VN-A001) | 12 | A | Phổ thông - cửa sổ
+1 (VN-A001) | 30 | F | Phổ thông - cửa sổ
+---END---
+B.7  promotions
+So với v0.3: SỬA
+Giải thích: Chương trình khuyến mãi tự động: giá vé được giảm sẵn, khách không cần làm gì và không cần sở hữu gì.
+Mục đích tạo: Cho ADMIN tạo giảm giá theo thời gian cho một nhóm chuyến bay (xác định ở promotion_scopes). Khác voucher ở chỗ không thuộc về riêng ai; giá sau giảm hiển thị ngay khi khách tìm chuyến, nên mọi điều kiện của khuyến mãi (trần giảm, giá tối thiểu) đều tính trên một dòng vé chứ không tính trên cả đơn.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+promotion_code | VARCHAR(50) | NOT NULL, UNIQUE | Mã chương trình, để ADMIN tra cứu (đổi tên từ promo_code)
+promotion_name | VARCHAR(150) | NOT NULL | Tên chương trình hiển thị (đổi tên từ promo_name)
+discount_type | VARCHAR(10) | NOT NULL, CHECK IN (PERCENT, AMOUNT) | PERCENT = giảm theo %; AMOUNT = giảm số tiền cố định
+discount_value | NUMERIC(12,2) | NOT NULL, CHECK > 0 (PERCENT thì ≤ 100) | Giá trị giảm
+max_discount_amount  mới v0.4 | NUMERIC(12,2) | NULL, CHECK > 0 | Trần giảm tối đa cho MỖI dòng vé, chỉ có ý nghĩa với PERCENT (NULL = không trần; AMOUNT thì để NULL)
+min_fare_amount  mới v0.4 | NUMERIC(12,2) | NULL, CHECK ≥ 0 | Giá dòng vé tối thiểu (đã gồm thuế phí, sau tỉ lệ trẻ em) thì dòng đó mới được giảm (NULL = không yêu cầu)
+applicable_trip_type  mới v0.4 | VARCHAR(12) | NOT NULL, DEFAULT ANY, CHECK IN (ANY, ONE_WAY, ROUND_TRIP) | Loại hành trình áp dụng, so với bookings.trip_type: ANY = cả hai; ONE_WAY = chỉ một chiều; ROUND_TRIP = chỉ khứ hồi. Là điều kiện của cả booking nên không đặt trong promotion_scopes
+start_date | DATE | NOT NULL | Ngày bắt đầu
+end_date | DATE | NOT NULL, CHECK ≥ start_date | Ngày kết thúc
+is_active | BOOLEAN | NOT NULL, DEFAULT true | Đang được phép sử dụng hay đã tắt (bật/tắt ngay trong chức năng Cập nhật)
+is_deleted | BOOLEAN | NOT NULL, DEFAULT false | Đã xóa mềm chưa (true = đã xóa mềm, dữ liệu lịch sử vẫn giữ)
+deleted_at | TIMESTAMPTZ | NULL | Thời điểm xóa mềm
+created_at / updated_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+Ghi chú / ràng buộc thêm:
+Đơn vị tính giảm là một “dòng vé” = một hành khách ADULT hoặc CHILD trên một chặng bay. Hành khách INFANT không được khuyến mãi (giá em bé đã rất thấp, nếu giảm số tiền cố định thì gần như xóa luôn giá vé).
+PERCENT giảm % trên giá của dòng vé (đã gồm thuế phí, đã nhân tỉ lệ trẻ em nếu là CHILD), tối đa max_discount_amount mỗi dòng. AMOUNT giảm số tiền cố định cho MỖI dòng vé, nên vé khứ hồi cho 2 người tính 4 lần.
+Dòng vé có giá thấp hơn min_fare_amount thì không được giảm. Mức giảm không vượt quá giá vé của dòng đó.
+Một dòng vé chỉ áp 1 promotion: nếu nhiều promotion cùng khớp thì chọn cái giảm nhiều nhất, không cộng dồn.
+Không có dòng nào trong promotion_scopes nghĩa là áp cho tất cả chuyến bay. Chuyến bay bị loại trừ nằm ở promotion_excluded_flights.
+applicable_trip_type = ROUND_TRIP thì khuyến mãi áp cho cả hai chặng của booking khứ hồi (nếu chặng khớp phạm vi). Khi tìm chuyến, hệ thống phải biết khách đang tìm một chiều hay khứ hồi mới hiển thị đúng giá giảm.
+Trạng thái “hết hạn” tính từ end_date, không lưu thành cột.
+B.8  promotion_scopes
+So với v0.3: SỬA (CHỈ GHI CHÚ)
+Giải thích: Phạm vi áp dụng của khuyến mãi: khuyến mãi này giảm cho hãng nào, hạng vé nào, tuyến nào hoặc chuyến nào.
+Mục đích tạo: Cho phép một khuyến mãi áp cho nhiều nhóm cùng lúc (ví dụ hãng VN và tuyến HAN → DAD) mà không phải nhét vào một cột. Làm theo mẫu promotion_scopes của LaptopShop (Brand → hãng bay, Category → hạng vé, Product → chuyến bay).
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+promotion_id | BIGINT | NOT NULL, FK → promotions.id | Khuyến mãi
+target_type | VARCHAR(15) | NOT NULL, CHECK IN (AIRLINE, FARE_CLASS, ROUTE, FLIGHT) | Loại phạm vi
+airline_id | BIGINT | NULL, FK → airlines.id | Dùng khi target_type = AIRLINE
+fare_class_id | BIGINT | NULL, FK → fare_classes.id | Dùng khi target_type = FARE_CLASS
+flight_id | BIGINT | NULL, FK → flights.id | Dùng khi target_type = FLIGHT
+departure_airport_id | BIGINT | NULL, FK → airports.id | Dùng khi target_type = ROUTE: sân bay đi
+arrival_airport_id | BIGINT | NULL, FK → airports.id | Dùng khi target_type = ROUTE: sân bay đến
+---END---
+Ghi chú / ràng buộc thêm:
+CHECK theo target_type: AIRLINE chỉ có airline_id; FARE_CLASS chỉ có fare_class_id; FLIGHT chỉ có flight_id; ROUTE có ít nhất một trong hai sân bay (đủ cả hai = đúng tuyến, chỉ có sân bay đi = mọi chuyến đi từ đó).
+Nhiều dòng của cùng một khuyến mãi là điều kiện HOẶC: dòng vé khớp bất kỳ dòng nào thì được giảm.
+ROUTE có hướng: HAN → SGN chỉ khớp chặng đi từ HAN. Khuyến mãi muốn áp cho cả hai chiều của vé khứ hồi thì thêm một dòng ROUTE đảo chiều (SGN → HAN).
+Loại hành trình (một chiều / khứ hồi) không nằm ở đây mà ở promotions.applicable_trip_type, vì đó là điều kiện của cả booking.
+Khác LaptopShop: dùng cột khóa ngoại riêng cho từng loại thay vì một cột target_value dạng chuỗi, nhờ đó DB kiểm tra được khóa ngoại và tên cột tự giải thích.
+Ví dụ dữ liệu: Khuyến mãi “Giảm 10% hãng VN và mọi chuyến đến Đà Nẵng” có 2 dòng phạm vi:
+---TABLE---
+promotion_id | target_type | airline_id | departure_airport_id | arrival_airport_id
+5 | AIRLINE | 1 (VN) | — | —
+5 | ROUTE | — | — | 3 (DAD)
+---END---
+B.9  promotion_excluded_flights
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Danh sách chuyến bay bị loại trừ khỏi một khuyến mãi.
+Mục đích tạo: Dùng khi khuyến mãi áp cho cả hãng/tuyến nhưng muốn chừa một vài chuyến (ví dụ chuyến dịp Tết). Loại trừ luôn thắng phạm vi: chuyến nằm trong bảng này thì không bao giờ được giảm. Tương ứng promotion_excludes của LaptopShop.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+promotion_id | BIGINT | PK, FK → promotions.id | Khuyến mãi
+flight_id | BIGINT | PK, FK → flights.id | Chuyến bay bị loại trừ
+---END---
+Ghi chú / ràng buộc thêm:
+Khác LaptopShop (lưu productId dạng chuỗi, không khóa ngoại): ở đây dùng khóa ngoại thật vì chuyến bay chỉ bị xóa mềm, không xóa cứng.
+B.10  vouchers
+So với v0.3: SỬA
+Giải thích: Định nghĩa voucher do ADMIN tạo: giảm bao nhiêu, điều kiện gì, thời hạn, phát cho ai.
+Mục đích tạo: Là “mẫu” voucher. Khách không nhập mã: khách nhận voucher vào ví (user_vouchers) rồi chọn dùng khi thanh toán. Có 2 cách phát: GLOBAL (toàn hệ thống, ai cũng thấy và bấm Nhận) và ASSIGNED (ADMIN tặng riêng từng người).
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+voucher_code | VARCHAR(50) | NOT NULL, UNIQUE (chưa xóa mềm) | Mã nội bộ để ADMIN tra cứu và hiển thị. Khách KHÔNG dùng mã này để nhập
+voucher_name | VARCHAR(150) | NOT NULL | Tên hiển thị cho khách ở Kho voucher / Voucher của tôi
+description | VARCHAR(500) | NULL | Mô tả / điều kiện hiển thị cho khách
+distribution_type | VARCHAR(10) | NOT NULL, CHECK IN (GLOBAL, ASSIGNED) | Cách phát voucher: GLOBAL = toàn hệ thống, khách bấm Nhận; ASSIGNED = ADMIN tặng riêng (đổi tên từ scope, vì trùng ý với bảng voucher_scopes)
+discount_type | VARCHAR(10) | NOT NULL, CHECK IN (PERCENT, AMOUNT) | Kiểu giảm: % hoặc số tiền (đổi tên từ voucher_type)
+discount_value | NUMERIC(12,2) | NOT NULL, CHECK > 0 (PERCENT thì ≤ 100) | Giá trị giảm (đổi tên từ value_amount)
+max_discount_amount | NUMERIC(12,2) | NULL, CHECK > 0 | Trần giảm tối đa cho CẢ booking, dành cho voucher PERCENT (NULL = không trần)
+min_order_amount  sửa v0.4 | NUMERIC(12,2) | NULL, CHECK ≥ 0 | Tổng giá vé tối thiểu (sau khuyến mãi, chỉ tính các dòng ADULT/CHILD khớp phạm vi) mới được dùng voucher (NULL = không yêu cầu). Đổi tên từ min_order_value cho đúng quy ước _amount
+applicable_trip_type  mới v0.4 | VARCHAR(12) | NOT NULL, DEFAULT ANY, CHECK IN (ANY, ONE_WAY, ROUND_TRIP) | Loại hành trình áp dụng, so với bookings.trip_type: ANY = cả hai; ONE_WAY = chỉ một chiều; ROUND_TRIP = chỉ khứ hồi
+start_date | DATE | NOT NULL | Ngày bắt đầu được nhận/dùng
+end_date | DATE | NOT NULL, CHECK ≥ start_date | Ngày hết hạn
+claim_limit | INT | NULL, CHECK > 0 | Tổng số lượt được nhận, chỉ áp cho GLOBAL (NULL = không giới hạn). Đổi tên từ usage_limit vì giờ đếm lượt NHẬN
+claimed_count | INT | NOT NULL, DEFAULT 0, CHECK ≥ 0 | Số lượt đã nhận (bộ đếm, tăng bằng câu lệnh UPDATE có điều kiện)
+is_active | BOOLEAN | NOT NULL, DEFAULT true | Đang được phép sử dụng hay đã tắt (bật/tắt ngay trong chức năng Cập nhật)
+is_deleted | BOOLEAN | NOT NULL, DEFAULT false | Đã xóa mềm chưa (true = đã xóa mềm, dữ liệu lịch sử vẫn giữ)
+deleted_at | TIMESTAMPTZ | NULL | Thời điểm xóa mềm
+created_at / updated_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+Ghi chú / ràng buộc thêm:
+Đã bỏ per_user_limit: mỗi khách chỉ giữ mỗi voucher một lần (UNIQUE ở user_vouchers) nên giới hạn này luôn bằng 1.
+Nhận voucher GLOBAL: UPDATE vouchers SET claimed_count = claimed_count + 1 WHERE id = :id AND (claim_limit IS NULL OR claimed_count < claim_limit); 1 dòng bị ảnh hưởng thì mới tạo dòng user_vouchers.
+Voucher không giảm cho hành khách INFANT (cùng quy tắc với khuyến mãi). Voucher tính trên CẢ booking nên trần giảm và giá tối thiểu tính theo cả booking, khác với khuyến mãi tính theo từng dòng vé.
+Phạm vi áp dụng nằm ở voucher_scopes; không có dòng nào nghĩa là áp cho mọi chuyến bay. Chuyến bay bị loại trừ nằm ở voucher_excluded_flights (loại trừ luôn thắng phạm vi).
+Trạng thái “hết hạn” tính từ end_date, không lưu thành cột.
+B.11  voucher_scopes
+So với v0.3: SỬA (CHỈ GHI CHÚ)
+Giải thích: Phạm vi áp dụng của voucher: voucher chỉ giảm cho phần giá vé của hãng / hạng vé / tuyến / chuyến nào.
+Mục đích tạo: Giống promotion_scopes nhưng dành cho voucher. Voucher chỉ giảm trên các dòng vé khớp phạm vi.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+voucher_id | BIGINT | NOT NULL, FK → vouchers.id | Voucher
+target_type | VARCHAR(15) | NOT NULL, CHECK IN (AIRLINE, FARE_CLASS, ROUTE, FLIGHT) | Loại phạm vi
+airline_id | BIGINT | NULL, FK → airlines.id | Dùng khi target_type = AIRLINE
+fare_class_id | BIGINT | NULL, FK → fare_classes.id | Dùng khi target_type = FARE_CLASS
+flight_id | BIGINT | NULL, FK → flights.id | Dùng khi target_type = FLIGHT
+departure_airport_id | BIGINT | NULL, FK → airports.id | Dùng khi target_type = ROUTE: sân bay đi
+arrival_airport_id | BIGINT | NULL, FK → airports.id | Dùng khi target_type = ROUTE: sân bay đến
+---END---
+Ghi chú / ràng buộc thêm:
+Quy tắc CHECK và cách hiểu nhiều dòng (điều kiện HOẶC, không có dòng = áp tất cả) giống promotion_scopes.
+ROUTE có hướng, giống promotion_scopes: muốn áp cho cả hai chiều thì thêm dòng ROUTE đảo chiều. Loại hành trình nằm ở vouchers.applicable_trip_type.
+B.12  voucher_excluded_flights
+So với v0.3: MỚI
+Giải thích: Danh sách chuyến bay bị loại trừ khỏi một voucher (đối xứng với promotion_excluded_flights).
+Mục đích tạo: Dùng khi voucher áp cho cả hãng / hạng vé / tuyến nhưng muốn chừa một vài chuyến. Loại trừ luôn thắng phạm vi: chuyến nằm trong bảng này thì không bao giờ được giảm. Bổ sung ở bản rà soát v0.4 để voucher có đủ cặp “phạm vi + loại trừ” như khuyến mãi.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+voucher_id | BIGINT | PK, FK → vouchers.id | Voucher
+flight_id | BIGINT | PK, FK → flights.id | Chuyến bay bị loại trừ
+---END---
+Ghi chú / ràng buộc thêm:
+Quy tắc giống promotion_excluded_flights: dùng khóa ngoại thật tới flights vì chuyến bay chỉ bị xóa mềm, không xóa cứng. Khi tính voucher (mục 5.4), chuyến nằm trong bảng này bị loại trước khi xét voucher_scopes.
+B.13  user_vouchers
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Ví voucher của khách hàng: mỗi dòng là một voucher mà một khách đang giữ, kèm trạng thái và (nếu đã dùng) dùng cho booking nào, giảm bao nhiêu.
+Mục đích tạo: Là nơi khách thấy “Voucher của tôi” và chọn dùng khi thanh toán. Bảng này kiêm luôn lịch sử sử dụng nên đã bỏ bảng voucher_usages (phương án A).
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+user_id | BIGINT | NOT NULL, FK → users.id | Khách đang giữ voucher
+voucher_id | BIGINT | NOT NULL, FK → vouchers.id | Voucher
+status | VARCHAR(10) | NOT NULL, DEFAULT AVAILABLE, CHECK IN (AVAILABLE, RESERVED, USED, EXPIRED) | AVAILABLE = còn dùng được; RESERVED = đang gắn với booking chờ thanh toán; USED = đã dùng; EXPIRED = quá hạn chưa dùng. Thêm RESERVED vì booking tạo trước khi thanh toán
+source | VARCHAR(10) | NOT NULL, CHECK IN (CLAIMED, GIFTED) | Cách có voucher: CLAIMED = khách tự bấm Nhận; GIFTED = ADMIN tặng
+received_at | TIMESTAMPTZ | NOT NULL | Thời điểm nhận (đổi tên từ assigned_at)
+expires_at | TIMESTAMPTZ | NULL | Hạn dùng, chép từ vouchers.end_date lúc nhận để sau này ADMIN sửa hạn voucher không ảnh hưởng voucher đã phát
+booking_id | BIGINT | NULL, UNIQUE, FK → bookings.id | Booking đang giữ hoặc đã dùng voucher này (NULL = chưa gắn). UNIQUE nên 1 booking chỉ dùng 1 voucher
+discount_amount | NUMERIC(12,2) | NULL, CHECK ≥ 0 | Số tiền thực tế đã giảm cho booking (tính ở bước áp voucher)
+used_at | TIMESTAMPTZ | NULL | Thời điểm thanh toán thành công và voucher chuyển USED
+---END---
+Ghi chú / ràng buộc thêm:
+UNIQUE (user_id, voucher_id): một khách chỉ giữ mỗi voucher một lần. DB chặn nhận trùng kể cả khi 2 request chạy song song.
+Vòng đời: AVAILABLE → RESERVED (tạo booking, gắn booking_id) → USED (thanh toán thành công). Booking hết hạn hoặc bị hủy khi chưa thanh toán thì RESERVED quay về AVAILABLE và xóa booking_id nếu voucher còn hạn.
+Voucher ASSIGNED: ADMIN tặng thì tạo dòng ở đây ngay (source = GIFTED). Voucher GLOBAL: chỉ có dòng khi khách bấm Nhận (source = CLAIMED).
+Job quét định kỳ chuyển AVAILABLE quá expires_at sang EXPIRED.
+Ví dụ dữ liệu: Hai dòng của khách An: một voucher đã dùng cho booking 77, một voucher còn dùng được:
+---TABLE---
+user_id | voucher_id | status | source | booking_id | discount_amount
+10 | 3 | USED | CLAIMED | 77 | 100.000
+10 | 8 | AVAILABLE | GIFTED | — | —
+---END---
+B.14  news_categories
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Danh mục chuyên mục tin tức.
+Mục đích tạo: Phân loại bài viết để khách lọc tin theo chủ đề.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+name | VARCHAR(100) | NOT NULL, UNIQUE | Tên chuyên mục
+description | VARCHAR(255) | NULL | Mô tả
+is_active | BOOLEAN | NOT NULL, DEFAULT true | Đang được phép sử dụng hay đã tắt (bật/tắt ngay trong chức năng Cập nhật)
+is_deleted | BOOLEAN | NOT NULL, DEFAULT false | Đã xóa mềm chưa (true = đã xóa mềm, dữ liệu lịch sử vẫn giữ)
+deleted_at | TIMESTAMPTZ | NULL | Thời điểm xóa mềm
+created_at / updated_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+B.15  news_items
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Bài viết tin tức / thông báo của hệ thống.
+Mục đích tạo: Nội dung quảng bá, thông tin hãng bay... Vòng đời DRAFT → PUBLISHED → UNPUBLISHED; khách chỉ thấy bài PUBLISHED.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+title | VARCHAR(255) | NOT NULL | Tiêu đề
+content | TEXT | NOT NULL | Nội dung
+status | VARCHAR(15) | NOT NULL, DEFAULT DRAFT, CHECK IN (DRAFT, PUBLISHED, UNPUBLISHED) | Trạng thái bài viết
+published_at | TIMESTAMPTZ | NULL | Thời điểm publish
+is_deleted | BOOLEAN | NOT NULL, DEFAULT false | Đã xóa mềm chưa (true = đã xóa mềm, dữ liệu lịch sử vẫn giữ)
+deleted_at | TIMESTAMPTZ | NULL | Thời điểm xóa mềm
+created_at / updated_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+Ghi chú / ràng buộc thêm:
+Bài PUBLISHED phải có ít nhất 1 chuyên mục trong news_category_mapping (kiểm tra ở service khi Publish).
+B.16  news_category_mapping
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Bảng trung gian gán bài viết vào chuyên mục (N—N).
+Mục đích tạo: Một bài viết có thể thuộc nhiều chuyên mục, một chuyên mục chứa nhiều bài.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+news_id | BIGINT | PK, FK → news_items.id | Bài viết
+category_id | BIGINT | PK, FK → news_categories.id | Chuyên mục
+---END---
+3.3 NHÓM C — CHUYẾN BAY & GIÁ VÉ (FLIGHT & FARE)
+Phase 2: chuyến bay, loại vé, quy định loại vé, giá bán theo từng chuyến và tồn ghế. Mỗi chuyến bay dùng đúng 1 máy bay; khi cần thêm sức chứa thì mở thêm một chuyến bổ sung.
+C.1  flights
+So với v0.3: SỬA (CHỈ GHI CHÚ)
+Giải thích: Một chuyến bay cụ thể: số hiệu, hãng, máy bay, tuyến bay và giờ bay. Có hai trạng thái độc lập: vận hành (operation_status) và mở bán (sales_status).
+Mục đích tạo: Là đối tượng khách tìm kiếm và đặt vé. Gắn với 1 máy bay nên sức chứa và sơ đồ ghế được xác định rõ, không bị đổi giữa chừng khi đã có khách đặt.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+flight_number | VARCHAR(20) | NOT NULL | Số hiệu chuyến bay
+airline_id | BIGINT | NOT NULL, FK → airlines.id | Hãng khai thác
+aircraft_id | BIGINT | NOT NULL, FK → aircrafts.id | Máy bay của chuyến (1 chuyến = 1 máy bay)
+departure_airport_id | BIGINT | NOT NULL, FK → airports.id | Sân bay đi
+arrival_airport_id | BIGINT | NOT NULL, FK → airports.id, CHECK ≠ sân bay đi | Sân bay đến
+scheduled_departure | TIMESTAMPTZ | NOT NULL | Giờ khởi hành dự kiến
+scheduled_arrival | TIMESTAMPTZ | NOT NULL, CHECK > scheduled_departure | Giờ đến dự kiến
+operation_status | VARCHAR(15) | NOT NULL, DEFAULT DRAFT, CHECK IN (DRAFT, SCHEDULED, BOARDING, DELAYED, DEPARTED, ARRIVED, CANCELLED) | Trạng thái vận hành (đổi tên từ status để đi cặp rõ ràng với sales_status)
+sales_status | VARCHAR(10) | NOT NULL, DEFAULT CLOSED, CHECK IN (OPEN, CLOSED) | Trạng thái mở/đóng bán vé
+parent_flight_id | BIGINT | NULL, FK → flights.id | Nếu đây là chuyến bổ sung: trỏ về chuyến gốc cùng tuyến/giờ. NULL = chuyến thường (đổi tên từ base_flight_id)
+is_deleted | BOOLEAN | NOT NULL, DEFAULT false | Đã xóa mềm chưa (true = đã xóa mềm, dữ liệu lịch sử vẫn giữ)
+deleted_at | TIMESTAMPTZ | NULL | Thời điểm xóa mềm
+created_at / updated_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+Ghi chú / ràng buộc thêm:
+UNIQUE (flight_number, scheduled_departure) cho bản ghi chưa xóa mềm. Chuyến bổ sung phải có số hiệu khác chuyến gốc.
+Flight mới tạo ở DRAFT + CLOSED. Muốn OPEN phải có FlightFare hợp lệ và Seat Inventory.
+Chỉ chọn được máy bay đã có sơ đồ ghế đủ seat_capacity (mục 5.7); không có sơ đồ thì không sinh được Seat Inventory.
+Không cho đổi aircraft_id khi chuyến đã có Booking (tránh lệch sơ đồ ghế của vé đã bán).
+Ví dụ dữ liệu: Chuyến VN123 gần hết ghế nên mở thêm chuyến bổ sung VN123B bằng máy bay khác:
+---TABLE---
+id | flight_number | aircraft_id | tuyến / giờ | parent_flight_id
+101 | VN123 | 1 (VN-A001) | HAN → SGN, 08:00 | — (chuyến gốc)
+102 | VN123B | 2 (VN-A002) | HAN → SGN, 08:00 | 101 (chuyến bổ sung của 101)
+---END---
+C.2  fare_classes
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Danh mục loại vé / hạng giá (ví dụ Economy Saver, Economy Flex, Business).
+Mục đích tạo: Khách chọn loại vé khi đặt; mỗi loại vé gắn với quy định riêng (fare_rules) và giá riêng theo từng chuyến (flight_fares).
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+fare_class_code | VARCHAR(30) | NOT NULL, UNIQUE | Mã loại vé (đổi tên từ class_code, tránh nhầm với “class” của Java)
+fare_class_name | VARCHAR(100) | NOT NULL | Tên loại vé (đổi tên từ class_name)
+seat_class | VARCHAR(20) | NOT NULL, CHECK IN (ECONOMY, BUSINESS, FIRST) | Hạng ghế tương ứng
+is_active | BOOLEAN | NOT NULL, DEFAULT true | Đang được phép sử dụng hay đã tắt (bật/tắt ngay trong chức năng Cập nhật)
+is_deleted | BOOLEAN | NOT NULL, DEFAULT false | Đã xóa mềm chưa (true = đã xóa mềm, dữ liệu lịch sử vẫn giữ)
+deleted_at | TIMESTAMPTZ | NULL | Thời điểm xóa mềm
+created_at / updated_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+C.3  fare_rules
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Quy định và quyền lợi của một loại vé, có version. Hiện chứa chính sách hoàn vé đơn giản: hủy trước giờ khởi hành đủ số giờ quy định thì được hoàn một phần trăm.
+Mục đích tạo: Giúp ADMIN đổi chính sách hoàn vé mà không ảnh hưởng vé đã bán, vì booking_segments lưu lại version đã áp dụng.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+fare_class_id | BIGINT | NOT NULL, FK → fare_classes.id | Loại vé áp dụng
+version | INT | NOT NULL, CHECK ≥ 1 | Số version; sửa rule đã dùng thì tạo version mới
+is_refundable | BOOLEAN | NOT NULL | Loại vé này có được hoàn tiền không
+refund_min_hours_before_departure | INT | NOT NULL, CHECK ≥ 0 | Phải hủy trước giờ khởi hành ít nhất bao nhiêu giờ thì mới được hoàn, ví dụ 24 (đổi tên từ refund_cutoff_hours)
+refund_percent | NUMERIC(5,2) | NOT NULL, CHECK BETWEEN 0 AND 100 | Phần trăm hoàn khi đủ điều kiện giờ; hủy trễ hơn thì hoàn 0%
+description | VARCHAR(500) | NULL | Mô tả quyền lợi / điều kiện hiển thị cho khách
+effective_from | TIMESTAMPTZ | NOT NULL | Thời điểm bắt đầu áp dụng version này
+is_active | BOOLEAN | NOT NULL, DEFAULT true | Đang được phép sử dụng hay đã tắt (bật/tắt ngay trong chức năng Cập nhật)
+is_deleted | BOOLEAN | NOT NULL, DEFAULT false | Đã xóa mềm chưa (true = đã xóa mềm, dữ liệu lịch sử vẫn giữ)
+deleted_at | TIMESTAMPTZ | NULL | Thời điểm xóa mềm
+created_at / updated_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+Ghi chú / ràng buộc thêm:
+UNIQUE (fare_class_id, version).
+Khi đặt vé, hệ thống lấy version đang áp dụng của loại vé (is_active, effective_from ≤ hiện tại, version cao nhất) và lưu id vào booking_segments.fare_rule_id.
+Nếu is_refundable = false thì bỏ qua refund_percent và hoàn 0.
+Ví dụ dữ liệu: Loại vé Economy Saver, version 1: hủy trước giờ bay ít nhất 24 giờ thì hoàn 80%:
+---TABLE---
+fare_class_id | version | is_refundable | refund_min_hours_before_departure | refund_percent
+1 (Economy Saver) | 1 | true | 24 | 80
+---END---
+C.4  flight_fares
+So với v0.3: SỬA
+Giải thích: Giá bán NGƯỜI LỚN của một loại vé trên một chuyến bay, theo khoảng thời gian hiệu lực. Giá trẻ em và em bé không lưu ở đây mà tính từ giá người lớn bằng tỉ lệ cố định (mục 5.3).
+Mục đích tạo: Cho phép đổi giá theo thời điểm mà không sửa giá cũ: muốn đổi giá thì tạo dòng mới với khoảng hiệu lực mới. Giá một vé người lớn = base_fare + tax_fee. ADMIN chỉ nhập một dòng giá cho mỗi (chuyến, loại vé) thay vì ba dòng theo ADULT/CHILD/INFANT.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+flight_id | BIGINT | NOT NULL, FK → flights.id | Chuyến bay
+fare_class_id | BIGINT | NOT NULL, FK → fare_classes.id | Loại vé
+base_fare | NUMERIC(12,2) | NOT NULL, CHECK ≥ 0 | Giá vé cơ bản của người lớn
+tax_fee | NUMERIC(12,2) | NOT NULL, DEFAULT 0, CHECK ≥ 0 | Thuế và phí gộp chung một cột của người lớn (v0.2 tách hai cột tax, fee)
+currency | VARCHAR(3) | NOT NULL, DEFAULT VND | Loại tiền
+effective_from | TIMESTAMPTZ | NOT NULL | Bắt đầu hiệu lực
+effective_to | TIMESTAMPTZ | NULL, CHECK > effective_from | Kết thúc hiệu lực (NULL = chưa kết thúc)
+created_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo
+---END---
+Ghi chú / ràng buộc thêm:
+v0.4 bỏ cột passenger_type: bảng chỉ có giá người lớn. Khi backfill từ dữ liệu cũ chỉ giữ các dòng ADULT.
+Giá vé một người lớn = base_fare + tax_fee; tính khi đọc, không lưu thừa. Giá CHILD = 75% và INFANT = 10% của số này (cấu hình trong application.yml). Khuyến mãi và voucher tính trên giá của từng dòng vé (đã gồm thuế phí).
+Không cho hai dòng chồng thời gian cùng (flight_id, fare_class_id): dùng EXCLUDE USING gist với tstzrange (cần extension btree_gist) hoặc kiểm tra ở service.
+Ví dụ dữ liệu: Một dòng giá của chuyến VN123, loại Economy Saver, đang áp dụng, và giá ba loại hành khách suy ra từ đó:
+---TABLE---
+loại hành khách | cách tính | giá vé một người
+ADULT | base_fare 1.000.000 + tax_fee 200.000 | 1.200.000
+CHILD | 75% × 1.200.000 | 900.000
+INFANT | 10% × 1.200.000 | 120.000
+---END---
+C.5  flight_seats
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Tồn ghế của từng chuyến bay: mỗi dòng là một ghế vật lý trên một chuyến, kèm trạng thái hiện tại.
+Mục đích tạo: Là nguồn duy nhất cho biết ghế nào còn trống, đang giữ hay đã bán. Sinh ra từ aircraft_seats của máy bay khi tạo Seat Inventory.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+flight_id | BIGINT | NOT NULL, FK → flights.id | Chuyến bay
+aircraft_seat_id | BIGINT | NOT NULL, FK → aircraft_seats.id | Ghế gốc trong sơ đồ máy bay (đổi tên từ seat_config_id)
+seat_code | VARCHAR(10) | NOT NULL | Mã ghế hiển thị, ví dụ 12A (ghép từ seat_row + seat_column)
+status | VARCHAR(10) | NOT NULL, DEFAULT AVAILABLE, CHECK IN (AVAILABLE, HOLD, BOOKED, BLOCKED) | Trạng thái ghế: còn trống / đang giữ / đã bán / bị khóa
+seat_surcharge | NUMERIC(12,2) | NOT NULL, DEFAULT 0, CHECK ≥ 0 | Phụ thu khi chọn ghế này, 0 = không phụ thu (đổi tên từ price_at_time vì tên cũ khó hiểu)
+version | BIGINT | NOT NULL, DEFAULT 0 | Số version cho khóa lạc quan (@Version), chống 2 người cùng chiếm 1 ghế
+---END---
+Ghi chú / ràng buộc thêm:
+UNIQUE (flight_id, seat_code) và UNIQUE (flight_id, aircraft_seat_id): không sinh trùng ghế.
+Block / Unblock chỉ chuyển qua lại giữa BLOCKED và AVAILABLE, không phải gán ghế cho khách.
+3.4 NHÓM D — ĐẶT VÉ, THANH TOÁN & VÉ ĐIỆN TỬ
+Phase 3: gói hành lý, booking, hành khách, giữ ghế, thanh toán, vé điện tử. Booking được tạo trước khi thanh toán ở trạng thái PENDING_PAYMENT.
+D.1  baggage_options
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Danh mục gói hành lý mua thêm (ví dụ 15kg, 20kg).
+Mục đích tạo: Cho khách mua thêm hành lý ký gửi khi đặt vé; giá được chụp lại vào booking_baggages để sau này đổi giá không ảnh hưởng vé cũ.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+name | VARCHAR(100) | NOT NULL | Tên gói
+weight_kg | NUMERIC(6,2) | NOT NULL, CHECK > 0 | Khối lượng
+price | NUMERIC(12,2) | NOT NULL, CHECK ≥ 0 | Giá hiện tại
+is_active | BOOLEAN | NOT NULL, DEFAULT true | Đang được phép sử dụng hay đã tắt (bật/tắt ngay trong chức năng Cập nhật)
+is_deleted | BOOLEAN | NOT NULL, DEFAULT false | Đã xóa mềm chưa (true = đã xóa mềm, dữ liệu lịch sử vẫn giữ)
+deleted_at | TIMESTAMPTZ | NULL | Thời điểm xóa mềm
+created_at / updated_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+D.2  bookings
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Một lần đặt vé của khách hàng (một chiều hoặc khứ hồi). Mã booking cũng chính là mã PNR.
+Mục đích tạo: Là bảng trung tâm của nghiệp vụ đặt vé: gom hành khách, chặng bay, ghế, thanh toán và vé. Lưu luôn bảng giá chi tiết (giá vé, khuyến mãi, voucher, phụ thu ghế, hành lý) để đọc một dòng là hiểu khách trả bao nhiêu và vì sao.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+booking_code | VARCHAR(30) | NOT NULL, UNIQUE | Mã Booking / PNR
+user_id | BIGINT | NOT NULL, FK → users.id | CUSTOMER tạo booking
+trip_type | VARCHAR(12) | NOT NULL, CHECK IN (ONE_WAY, ROUND_TRIP) | Loại hành trình (đối chiếu với applicable_trip_type của khuyến mãi / voucher)
+status | VARCHAR(20) | NOT NULL, CHECK IN (PENDING_PAYMENT, CONFIRMED, CANCELLED, EXPIRED) | Trạng thái booking
+fare_amount | NUMERIC(12,2) | NOT NULL, CHECK ≥ 0 | Tổng giá vé gốc của mọi hành khách (cả em bé) và mọi chặng (đã gồm thuế phí, trước giảm)
+promotion_discount_amount | NUMERIC(12,2) | NOT NULL, DEFAULT 0, CHECK ≥ 0 | Tổng tiền giảm do khuyến mãi
+voucher_discount_amount | NUMERIC(12,2) | NOT NULL, DEFAULT 0, CHECK ≥ 0 | Tiền giảm do voucher (khớp user_vouchers.discount_amount)
+seat_surcharge_amount | NUMERIC(12,2) | NOT NULL, DEFAULT 0, CHECK ≥ 0 | Tổng phụ thu chọn ghế
+baggage_amount | NUMERIC(12,2) | NOT NULL, DEFAULT 0, CHECK ≥ 0 | Tổng tiền hành lý mua thêm
+total_amount | NUMERIC(12,2) | NOT NULL, CHECK ≥ 0 | Số tiền khách phải trả = fare_amount − promotion_discount_amount − voucher_discount_amount + seat_surcharge_amount + baggage_amount
+currency | VARCHAR(3) | NOT NULL, DEFAULT VND | Loại tiền (đổi tên từ snapshot_currency)
+payment_expires_at | TIMESTAMPTZ | NOT NULL | Hạn thanh toán / giữ ghế = lúc tạo + 15 phút (đổi tên từ expires_at cho rõ nghĩa)
+cancelled_at | TIMESTAMPTZ | NULL | Thời điểm khách hủy
+cancel_reason | VARCHAR(255) | NULL | Lý do hủy
+applied_refund_percent | NUMERIC(5,2) | NULL, CHECK BETWEEN 0 AND 100 | Phần trăm hoàn đã áp dụng lúc hủy, chụp lại không đổi theo rule sau này (đổi tên từ refund_percent_snapshot)
+refund_amount | NUMERIC(12,2) | NULL, CHECK ≥ 0 và ≤ total_amount | Số tiền thực tế hoàn vào ví
+created_at / updated_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+Ghi chú / ràng buộc thêm:
+CHECK: total_amount = fare_amount − promotion_discount_amount − voucher_discount_amount + seat_surcharge_amount + baggage_amount. Thay cho ý tưởng bảng booking_price_items ở v0.
+Chỉ hoàn tiền khi hủy booking CONFIRMED. Hủy booking PENDING_PAYMENT thì không phát sinh hoàn tiền.
+Ví dụ dữ liệu: Booking 2 người lớn HAN → SGN: khuyến mãi 10%, voucher 5% (trần 100.000), 2 ghế phụ thu 50.000 mỗi ghế, 1 gói hành lý 150.000:
+---TABLE---
+fare_amount | promotion_discount | voucher_discount | seat_surcharge | baggage | total_amount
+2.400.000 | 240.000 | 100.000 | 100.000 | 150.000 | 2.310.000
+---END---
+D.3  booking_segments
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Các chặng bay trong một booking (một chiều có 1 chặng, khứ hồi có 2 chặng). Mỗi chặng ứng với một chuyến bay và một loại vé đã chọn.
+Mục đích tạo: Nối booking với chuyến bay + loại vé, và chụp lại giá vé, khuyến mãi, quy định hoàn vé tại thời điểm đặt. Đổi tên từ booking_flights vì tên cũ dễ nhầm với bảng flights; “chặng” (segment) đúng với cách spec và cột segment_order gọi.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+booking_id | BIGINT | NOT NULL, FK → bookings.id | Booking
+flight_id | BIGINT | NOT NULL, FK → flights.id | Chuyến bay của chặng
+segment_order | INT | NOT NULL, CHECK ≥ 1 | Thứ tự chặng (1 = chiều đi, 2 = chiều về)
+fare_class_id | BIGINT | NOT NULL, FK → fare_classes.id | Loại vé đã chọn
+fare_rule_id | BIGINT | NOT NULL, FK → fare_rules.id | Version quy định vé áp dụng lúc đặt (dùng để tính hoàn tiền)
+fare_amount_at_booking | NUMERIC(12,2) | NOT NULL, CHECK ≥ 0 | Tổng giá vé gốc của chặng cho mọi hành khách (cả trẻ em, em bé theo tỉ lệ), gồm thuế phí, trước giảm, tại thời điểm đặt (đổi tên từ price_snapshot)
+promotion_id | BIGINT | NULL, FK → promotions.id | Khuyến mãi đã áp cho chặng này (NULL = không có)
+promotion_discount_amount | NUMERIC(12,2) | NOT NULL, DEFAULT 0, CHECK ≥ 0 | Tiền giảm của khuyến mãi trên chặng này
+currency | VARCHAR(3) | NOT NULL, DEFAULT VND | Tiền tệ
+---END---
+Ghi chú / ràng buộc thêm:
+UNIQUE (booking_id, segment_order) và UNIQUE (booking_id, flight_id).
+Tổng promotion_discount_amount của các chặng = bookings.promotion_discount_amount; tổng fare_amount_at_booking = bookings.fare_amount.
+Tỉ lệ giá trẻ em / em bé đã áp dụng được chụp vào tổng của chặng; đổi tỉ lệ trong application.yml sau này không làm sai tổng tiền của booking cũ.
+D.4  passengers
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Hành khách đi trên booking (người lớn, trẻ em, em bé).
+Mục đích tạo: Lưu thông tin từng người để in lên vé. Tối đa 9 hành khách mỗi booking; em bé không có ghế và số em bé ≤ số người lớn (kiểm tra ở service).
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+booking_id | BIGINT | NOT NULL, FK → bookings.id | Booking
+full_name | VARCHAR(150) | NOT NULL | Họ tên
+gender | VARCHAR(10) | NOT NULL, CHECK IN (MALE, FEMALE, OTHER) | Giới tính
+birth_date | DATE | NOT NULL | Ngày sinh
+passenger_type | VARCHAR(10) | NOT NULL, CHECK IN (ADULT, CHILD, INFANT) | Loại hành khách (quyết định tỉ lệ giá và có được khuyến mãi / voucher hay không)
+passport_number | VARCHAR(50) | NULL | Số giấy tờ nếu cần
+phone | VARCHAR(20) | NULL | Điện thoại
+email | VARCHAR(255) | NULL | Email
+---END---
+D.5  seat_holds
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Lịch sử giữ ghế: mỗi dòng là một lần giữ một ghế cho một hành khách trong lúc chờ thanh toán.
+Mục đích tạo: Giữ ghế tạm 15 phút để khách thanh toán và là nơi chống tranh chấp: hai người không thể cùng giữ một ghế. Tách khỏi flight_seats.status để còn lịch sử.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+booking_id | BIGINT | NOT NULL, FK → bookings.id | Booking
+passenger_id | BIGINT | NOT NULL, FK → passengers.id | Hành khách ngồi ghế này
+flight_seat_id | BIGINT | NOT NULL, FK → flight_seats.id | Ghế
+hold_expires_at | TIMESTAMPTZ | NOT NULL | Hết hạn giữ ghế (đổi tên từ held_until)
+surcharge_at_booking | NUMERIC(12,2) | NOT NULL, DEFAULT 0, CHECK ≥ 0 | Phụ thu ghế chụp lại lúc giữ, để đổi phụ thu sau này không ảnh hưởng booking
+status | VARCHAR(10) | NOT NULL, CHECK IN (HOLD, CONFIRMED, RELEASED) | Trạng thái giữ
+created_at | TIMESTAMPTZ | NOT NULL | Thời điểm giữ
+---END---
+Ghi chú / ràng buộc thêm:
+Partial unique index trên (flight_seat_id) WHERE status IN (HOLD, CONFIRMED): DB tự chặn hai lượt giữ hợp lệ cho cùng một ghế.
+Em bé (INFANT) không có seat_hold.
+D.6  booking_baggages
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Gói hành lý mà từng hành khách đã chọn trong booking.
+Mục đích tạo: Tính tiền hành lý và chụp lại giá tại thời điểm đặt.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+booking_id | BIGINT | NOT NULL, FK → bookings.id | Booking
+passenger_id | BIGINT | NOT NULL, FK → passengers.id | Hành khách (phải thuộc cùng booking)
+baggage_option_id | BIGINT | NOT NULL, FK → baggage_options.id | Gói hành lý
+quantity | INT | NOT NULL, CHECK > 0 | Số lượng
+unit_price_at_booking | NUMERIC(12,2) | NOT NULL, CHECK ≥ 0 | Giá một gói tại thời điểm đặt; tiền hành lý = quantity × giá này (đổi tên từ price_snapshot)
+currency | VARCHAR(3) | NOT NULL, DEFAULT VND | Tiền tệ
+---END---
+D.7  payments
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Các lần thanh toán (attempt) của một booking; thanh toán lại sau khi thất bại tạo thêm dòng mới.
+Mục đích tạo: Lưu kết quả từ cổng thanh toán để chuyển booking sang CONFIRMED khi SUCCESS và để xem chi tiết/đối soát giao dịch.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+booking_id | BIGINT | NOT NULL, FK → bookings.id | Booking
+amount | NUMERIC(12,2) | NOT NULL, CHECK > 0 | Số tiền thanh toán
+currency | VARCHAR(3) | NOT NULL, DEFAULT VND | Tiền tệ
+payment_method | VARCHAR(50) | NOT NULL | Phương thức thanh toán
+gateway_name | VARCHAR(50) | NULL | Tên cổng thanh toán, ví dụ ZaloPay, VNPay (đổi tên từ provider)
+gateway_transaction_id | VARCHAR(150) | NULL | Mã giao dịch phía cổng thanh toán (đổi tên từ gateway_ref)
+status | VARCHAR(10) | NOT NULL, CHECK IN (PENDING, SUCCESS, FAILED) | Trạng thái thanh toán
+retry_count | INT | NOT NULL, DEFAULT 0 | Số lần thử lại
+created_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo
+paid_at | TIMESTAMPTZ | NULL | Thời điểm thanh toán thành công
+---END---
+Ghi chú / ràng buộc thêm:
+UNIQUE (gateway_name, gateway_transaction_id) khi mã giao dịch khác NULL, để cổng gọi lại callback hai lần không tạo giao dịch trùng.
+D.8  e_tickets
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Vé điện tử: mỗi dòng là vé của một hành khách trên một chặng bay.
+Mục đích tạo: Chứng từ để khách đi máy bay, chỉ phát hành khi payment SUCCESS. Khi booking bị hủy, vé chuyển sang CANCELLED để không còn hiệu lực.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+booking_id | BIGINT | NOT NULL, FK → bookings.id | Booking (mã PNR lấy từ bookings.booking_code)
+booking_segment_id | BIGINT | NOT NULL, FK → booking_segments.id | Chặng bay (đổi tên từ booking_flight_id)
+passenger_id | BIGINT | NOT NULL, FK → passengers.id | Hành khách
+flight_seat_id | BIGINT | NULL, FK → flight_seats.id | Ghế (NULL với em bé)
+ticket_code | VARCHAR(30) | NOT NULL, UNIQUE | Mã vé
+status | VARCHAR(10) | NOT NULL, DEFAULT ISSUED, CHECK IN (ISSUED, CANCELLED) | Trạng thái vé
+issued_at | TIMESTAMPTZ | NOT NULL | Thời điểm phát hành
+---END---
+Ghi chú / ràng buộc thêm:
+PNR là của cả booking nên lấy từ bookings.booking_code, không có cột pnr_code riêng (một booking nhiều hành khách sẽ có nhiều vé cùng PNR).
+UNIQUE (booking_segment_id, passenger_id): mỗi hành khách chỉ một vé trên một chặng.
+3.5 NHÓM E — VÍ KHÁCH HÀNG (WALLET)
+Tiền hoàn khi hủy vé được cộng vào ví của khách. Chức năng rút tiền từ ví để sau, chưa làm trong phiên bản này.
+E.1  wallets
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Ví nội bộ của khách hàng, mỗi CUSTOMER có đúng một ví, được tạo ngay lúc đăng ký.
+Mục đích tạo: Giữ số dư tiền hoàn từ các booking bị hủy. Tách riêng khỏi payments vì đây là tiền của khách đang nằm trong hệ thống.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+user_id | BIGINT | NOT NULL, UNIQUE, FK → users.id | Chủ ví (quan hệ 1—1 với user)
+balance | NUMERIC(12,2) | NOT NULL, DEFAULT 0, CHECK ≥ 0 | Số dư hiện tại; không bao giờ âm
+currency | VARCHAR(3) | NOT NULL, DEFAULT VND | Tiền tệ
+version | BIGINT | NOT NULL, DEFAULT 0 | Khóa lạc quan, tránh cộng/trừ đồng thời làm sai số dư
+created_at / updated_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo / cập nhật gần nhất
+---END---
+Ghi chú / ràng buộc thêm:
+Tạo cùng giao dịch với việc đăng ký CUSTOMER. Với khách đã có sẵn, migration tạo ví bổ sung với số dư 0.
+Số dư luôn phải khớp tổng wallet_transactions của ví đó.
+E.2  wallet_transactions
+So với v0.3: GIỮ NGUYÊN
+Giải thích: Sổ giao dịch của ví: mỗi lần tiền vào hoặc ra ví là một dòng, không sửa không xóa.
+Mục đích tạo: Giúp truy vết số dư (khách hỏi “tiền này từ đâu”) và chống cộng hoàn tiền hai lần cho cùng một booking. Sau này thêm loại giao dịch rút tiền hoặc thanh toán bằng ví mà không đổi cấu trúc.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+wallet_id | BIGINT | NOT NULL, FK → wallets.id | Ví
+booking_id | BIGINT | NULL, FK → bookings.id | Booking phát sinh giao dịch (với hoàn tiền)
+transaction_type | VARCHAR(20) | NOT NULL, CHECK IN (REFUND_CREDIT) | Loại giao dịch. Hiện chỉ có REFUND_CREDIT (hoàn tiền); mở rộng khi làm rút tiền (đổi tên từ type)
+amount | NUMERIC(12,2) | NOT NULL, CHECK > 0 | Số tiền của giao dịch
+balance_after | NUMERIC(12,2) | NOT NULL, CHECK ≥ 0 | Số dư ví sau giao dịch
+description | VARCHAR(255) | NULL | Ghi chú, ví dụ “Hoàn tiền booking ABC123”
+created_at | TIMESTAMPTZ | NOT NULL | Thời điểm giao dịch
+---END---
+Ghi chú / ràng buộc thêm:
+UNIQUE (booking_id) WHERE transaction_type = REFUND_CREDIT: mỗi booking chỉ được hoàn tiền một lần.
+3.6 NHÓM F — THÔNG BÁO (NOTIFICATION)
+Spec Phase 3 (NOTI-01) yêu cầu gửi Email và Web Notification. Web Notification cần nơi lưu để khách xem lại và đánh dấu đã đọc.
+F.1  notifications (chưa triển khai)
+So với v0.3: GIỮ TRONG TÀI LIỆU, CHƯA TRIỂN KHAI
+Giải thích: Thông báo trên web gửi cho khách hàng khi có sự kiện: đăng ký thành công, thanh toán thành công/thất bại, hủy booking, có vé điện tử.
+Mục đích tạo: Lưu nội dung thông báo để hiển thị chuông thông báo và trạng thái đã đọc. Email gửi qua dịch vụ gửi mail, chưa cần bảng log riêng.
+---TABLE---
+Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa
+id | BIGINT | PK, IDENTITY | Khóa chính
+user_id | BIGINT | NOT NULL, FK → users.id | Người nhận
+type | VARCHAR(30) | NOT NULL, CHECK IN (REGISTER_SUCCESS, PAYMENT_SUCCESS, PAYMENT_FAILED, BOOKING_CANCELLED, E_TICKET_AVAILABLE) | Loại sự kiện (khớp 5 sự kiện trong spec)
+title | VARCHAR(200) | NOT NULL | Tiêu đề
+content | TEXT | NOT NULL | Nội dung
+booking_id | BIGINT | NULL, FK → bookings.id | Booking liên quan (nếu có)
+is_read | BOOLEAN | NOT NULL, DEFAULT false | Đã đọc chưa
+read_at | TIMESTAMPTZ | NULL | Thời điểm đọc
+created_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo
+---END---
+Ghi chú / ràng buộc thêm:
+Bảng này CHƯA triển khai ở giai đoạn hiện tại (chốt 2026-10-11): không tạo bảng trong migration, giữ lại mô tả trong tài liệu để làm chức năng thông báo sau. Phần DB dựng ngay vì vậy còn 35 bảng.
+4. Quan hệ giữa các bảng
+---TABLE---
+Liên kết | Cardinality | Mô tả
+roles — users | 1—N | Một role có nhiều user; mỗi user thuộc đúng 1 role.
+roles — role_permissions — permissions | N—N | Role có nhiều quyền, một quyền cấp cho nhiều role.
+cities — airports | 1—N | Mỗi sân bay thuộc 1 thành phố.
+airlines — flights | 1—N | Một hãng khai thác nhiều chuyến bay.
+aircrafts — flights | 1—N | Một máy bay phục vụ nhiều chuyến (ở các thời điểm khác nhau); mỗi chuyến dùng đúng 1 máy bay.
+airports — flights (đi / đến) | 1—N | Hai khóa ngoại departure_airport_id và arrival_airport_id.
+flights — flights (parent_flight_id) | 1—N | Chuyến gốc có thể có nhiều chuyến bổ sung; chuyến thường thì parent_flight_id = NULL.
+aircrafts — aircraft_seats | 1—N | Một máy bay có nhiều ghế; các ghế ghép lại thành MỘT sơ đồ ghế của máy bay, cấu hình cả sơ đồ cùng lúc (mục 5.7).
+seat_types — aircraft_seats | 1—N | Mỗi ghế có 1 loại ghế.
+aircraft_seats — flight_seats | 1—N | Ghế của chuyến bay được sinh từ ghế của máy bay.
+flights — flight_seats | 1—N | Một chuyến có nhiều ghế.
+flights — flight_fares | 1—N | Một chuyến có nhiều dòng giá (giá người lớn) theo loại vé và thời gian.
+fare_classes — flight_fares | 1—N | Một loại vé có giá trên nhiều chuyến.
+fare_classes — fare_rules | 1—N | Một loại vé có nhiều version quy định.
+fare_rules — booking_segments | 1—N | Mỗi chặng đặt lưu version quy định đã áp dụng.
+promotions — promotion_scopes | 1—N | Một khuyến mãi có nhiều dòng phạm vi (hãng, loại vé, tuyến, chuyến).
+promotions — promotion_excluded_flights — flights | N—N | Chuyến bay bị loại trừ khỏi khuyến mãi.
+promotions — booking_segments | 1—N | Chặng đặt ghi lại khuyến mãi đã áp dụng.
+vouchers — voucher_scopes | 1—N | Một voucher có nhiều dòng phạm vi.
+vouchers — user_vouchers — users | N—N | Voucher được nhận (GLOBAL) hoặc được tặng (ASSIGNED) vào ví của nhiều user.
+bookings — user_vouchers | 1—0..1 | Mỗi booking dùng tối đa 1 voucher (UNIQUE booking_id).
+users — bookings | 1—N | Một CUSTOMER có nhiều booking.
+bookings — booking_segments | 1—N | Booking có 1..2 chặng.
+flights — booking_segments | 1—N | Một chuyến xuất hiện trong nhiều booking.
+fare_classes — booking_segments | 1—N | Mỗi chặng chọn 1 loại vé.
+bookings — passengers | 1—N | Booking có 1..9 hành khách.
+bookings — seat_holds | 1—N | Booking có nhiều lượt giữ ghế.
+passengers — seat_holds | 1—N | Mỗi lượt giữ ghế dành cho 1 hành khách (em bé không có).
+flight_seats — seat_holds | 1—N | Một ghế có nhiều lượt giữ theo thời gian, nhưng tại một thời điểm chỉ 1 lượt hợp lệ.
+bookings — booking_baggages | 1—N | Booking có nhiều lựa chọn hành lý.
+passengers — booking_baggages | 1—N | Hành lý gắn cho hành khách cụ thể.
+baggage_options — booking_baggages | 1—N | Một gói hành lý được chọn trong nhiều booking.
+bookings — payments | 1—N | Nhiều lần thanh toán do retry.
+bookings — e_tickets | 1—N | Vé phát hành sau khi thanh toán thành công.
+booking_segments — e_tickets | 1—N | Vé gắn với chặng.
+passengers — e_tickets | 1—N | Vé gắn với hành khách.
+flight_seats — e_tickets | 1—N | Vé tham chiếu ghế thực tế.
+users — wallets | 1—1 | Mỗi CUSTOMER có đúng 1 ví, tạo lúc đăng ký.
+wallets — wallet_transactions | 1—N | Ví có nhiều giao dịch.
+bookings — wallet_transactions | 1—0..1 | Mỗi booking có tối đa 1 giao dịch hoàn tiền (REFUND_CREDIT).
+users — notifications | 1—N | Một user có nhiều thông báo.
+news_items — news_categories | N—N | Qua news_category_mapping.
+---END---
+5. Quy tắc nghiệp vụ gắn với thiết kế
+5.1 Chuyến bổ sung khi cầu cao (thay cho “nhiều máy bay trong một chuyến”)
+Lý thuyết: trong hàng không thực tế, một số hiệu chuyến bay gắn với một máy bay. Khi nhu cầu vượt sức chứa, hãng hoặc đổi sang máy bay lớn hơn, hoặc mở thêm một chuyến bổ sung cùng tuyến và cùng giờ nhưng khác số hiệu. Tài liệu chọn cách thứ hai vì không phải đổi sơ đồ ghế của vé đã bán.
+ADMIN/STAFF theo dõi số ghế AVAILABLE của chuyến (hiển thị trên Dashboard); khi còn ít ghế thì quyết định mở thêm chuyến.
+Tạo Flight mới cùng tuyến và giờ, khác flight_number, chọn máy bay khác, đặt parent_flight_id = chuyến gốc.
+Sinh Seat Inventory từ aircraft_seats của máy bay mới, cấu hình FlightFare, rồi chuyển sales_status sang OPEN.
+Khách thấy hai chuyến độc lập khi tìm kiếm; mỗi booking chỉ gắn với một chuyến cụ thể nên không có xung đột khi xuất vé.
+Không cho đổi aircraft_id của chuyến đã có Booking. Việc đổi máy bay sau khi bán vé nằm ngoài phạm vi MVP.
+5.2 Chống tranh chấp ghế
+Hai người cùng chọn ghế 12A là bài toán đồng thời, giải bằng khóa chứ không phải bằng thêm máy bay. Khi khách chọn ghế, backend chạy một câu lệnh có điều kiện:
+UPDATE flight_seats SET status = 'HOLD', version = version + 1
+WHERE id = :seatId AND status = 'AVAILABLE';
+-- 1 dòng bị ảnh hưởng: giữ ghế thành công -> INSERT seat_holds (HOLD, hold_expires_at = now + 15 phút)
+-- 0 dòng: người khác đã giữ trước -> báo khách chọn ghế khác
+Lớp bảo vệ thứ hai là partial unique index trên seat_holds(flight_seat_id) với trạng thái HOLD hoặc CONFIRMED: nếu code có lỗi, DB vẫn từ chối lượt giữ thứ hai. Job quét định kỳ chuyển HOLD quá hạn sang RELEASED, ghế về AVAILABLE, booking quá payment_expires_at sang EXPIRED.
+5.3 Tính giá: giá theo loại hành khách, khuyến mãi trước, voucher sau
+Lý thuyết: khuyến mãi (promotion) là giá giảm sẵn tự động, áp trên từng dòng vé. Voucher là quyền giảm giá của riêng khách, áp một lần cho cả booking trên phần còn lại sau khuyến mãi. Phụ thu ghế và hành lý là dịch vụ cộng thêm nên không được giảm.
+Bước 1 — giá của từng dòng vé. Dòng vé = một hành khách trên một chặng bay. Chỉ nhập giá người lớn ở flight_fares; giá hai loại còn lại tính bằng tỉ lệ cố định, chung cho mọi hãng:
+ADULT = base_fare + tax_fee của flight_fares đang hiệu lực.
+CHILD = ADULT × 75%; INFANT = ADULT × 10% (làm tròn đến đồng, HALF_UP, tính riêng từng dòng rồi mới cộng).
+Tỉ lệ nằm trong cấu hình, không có bảng riêng, và có thể đổi mà không ảnh hưởng booking cũ vì tổng tiền đã được chụp ở booking_segments:
+app:
+pricing:
+child-fare-percent: 75
+infant-fare-percent: 10
+Bước 2 — khuyến mãi (theo từng dòng vé). Với mỗi dòng vé, tìm các promotion thỏa đồng thời:
+Đang hiệu lực (is_active, trong khoảng start_date – end_date), applicable_trip_type khớp bookings.trip_type (ANY khớp mọi loại).
+Hành khách là ADULT hoặc CHILD (INFANT không được giảm).
+Khớp promotion_scopes (không có dòng phạm vi = khớp tất cả) và chuyến không nằm trong promotion_excluded_flights.
+Giá dòng vé ≥ min_fare_amount (nếu có).
+Mức giảm của một promotion: PERCENT = giá dòng vé × %, tối đa max_discount_amount (nếu có); AMOUNT = số tiền cố định; cả hai đều không vượt giá dòng vé. Nếu nhiều promotion cùng khớp thì chọn cái giảm nhiều nhất cho dòng đó, không cộng dồn. Giá sau khuyến mãi = giá vé gốc − tổng giảm khuyến mãi.
+Bước 3 — voucher (theo cả booking). Khách chọn một voucher AVAILABLE trong ví. Hệ thống kiểm tra còn hạn, applicable_trip_type khớp, và tổng giá sau khuyến mãi của các dòng ADULT/CHILD khớp voucher_scopes đạt min_order_amount. Giảm = PERCENT hay AMOUNT trên phần giá sau khuyến mãi của các dòng đó, tối đa max_discount_amount.
+Bước 4 — tổng thanh toán = giá sau khuyến mãi − giảm voucher + phụ thu ghế + hành lý (làm tròn đến đồng, HALF_UP). Phụ thu ghế chỉ có với ADULT và CHILD vì em bé không có ghế.
+Ví dụ 1: 2 người lớn HAN → SGN, base fare 1.000.000đ và thuế phí 200.000đ mỗi người; khuyến mãi 10%; voucher 5% (trần 100.000đ, đơn tối thiểu 1.500.000đ); 2 ghế phụ thu 50.000đ mỗi ghế; 1 gói hành lý 150.000đ.
+---TABLE---
+Bước | Cách tính | Kết quả
+Giá vé gốc (fare_amount) | 2 × (1.000.000 + 200.000) | 2.400.000
+Giảm khuyến mãi 10% | 10% × 2.400.000 | − 240.000
+Giá sau khuyến mãi | 2.400.000 − 240.000 | 2.160.000
+Giảm voucher 5% | 5% × 2.160.000 = 108.000, vượt trần nên lấy 100.000 | − 100.000
+Phụ thu ghế | 2 × 50.000 | + 100.000
+Hành lý | 1 × 150.000 | + 150.000
+Tổng thanh toán (total_amount) | 2.160.000 − 100.000 + 100.000 + 150.000 | 2.310.000
+---END---
+Ví dụ 2 (đủ ba loại hành khách): 1 người lớn + 1 trẻ em + 1 em bé đi một chiều HAN → SGN, cùng giá người lớn 1.200.000đ (đã gồm thuế phí). Khuyến mãi 10%, trần giảm 150.000đ mỗi dòng vé, giá vé tối thiểu 500.000đ; voucher 5% (trần 100.000đ, đơn tối thiểu 1.500.000đ). Không có ghế phụ thu và hành lý.
+---TABLE---
+Dòng vé | Giá vé gốc | Khuyến mãi 10% | Sau khuyến mãi
+Người lớn (100%) | 1.200.000 | − 120.000 | 1.080.000
+Trẻ em (75%) | 900.000 | − 90.000 | 810.000
+Em bé (10%) | 120.000 | 0 (em bé không được giảm) | 120.000
+Cộng | 2.220.000 | − 210.000 | 2.010.000
+---END---
+Voucher: cơ sở tính chỉ gồm dòng người lớn và trẻ em = 1.080.000 + 810.000 = 1.890.000, đạt mức tối thiểu 1.500.000. Giảm 5% × 1.890.000 = 94.500 (chưa chạm trần 100.000). Tổng thanh toán = 2.010.000 − 94.500 = 1.915.500đ. Ở bookings: fare_amount 2.220.000, promotion_discount_amount 210.000, voucher_discount_amount 94.500, total_amount 1.915.500.
+5.4 Voucher: nhận và dùng (khách không nhập mã)
+Lý thuyết: mô hình “ví voucher”. Voucher chỉ là mẫu; muốn dùng, khách phải có một bản của voucher trong ví (user_vouchers). Việc dùng chỉ nhận user_voucher_id do hệ thống trả về, không nhận mã gõ tay, nên không thể đoán mã để thử.
+---TABLE---
+ | GLOBAL (toàn hệ thống) | ASSIGNED (tặng riêng)
+ADMIN làm gì | Tạo voucher, đặt claim_limit nếu muốn giới hạn lượt nhận | Tạo voucher và chọn khách để tặng
+Khách thấy ở đâu | Kho voucher (mọi CUSTOMER thấy), bấm Nhận | Tự xuất hiện trong Voucher của tôi
+Dòng trong user_vouchers | Tạo khi khách bấm Nhận, source = CLAIMED | Tạo ngay khi ADMIN tặng, source = GIFTED
+Giới hạn | claim_limit, mỗi khách nhận 1 lần | Số khách được ADMIN chọn
+---END---
+Vòng đời một voucher trong ví khi đặt vé (booking tạo trước khi thanh toán, giữ ghế 15 phút):
+Khách chọn voucher lúc tạo booking: user_vouchers chuyển AVAILABLE → RESERVED, gắn booking_id, lưu discount_amount.
+Thanh toán thành công: RESERVED → USED, ghi used_at.
+Booking hết hạn hoặc bị hủy khi chưa thanh toán: RESERVED → AVAILABLE, xóa booking_id (nếu voucher còn hạn).
+Hủy booking đã CONFIRMED: voucher vẫn USED, không trả lại.
+Voucher đang RESERVED không thể gắn cho booking khác nên hai booking không dùng chung một voucher. Trong “Voucher của tôi”, voucher có applicable_trip_type không khớp loại hành trình đang đặt chỉ hiển thị mờ, không chọn được.
+5.5 Hủy vé và hoàn tiền về ví
+Quy tắc hoàn tiền đơn giản, chỉ dựa vào thời gian còn lại trước giờ khởi hành. Quy tắc nằm trong fare_rules của loại vé đã chọn (đã chụp ở booking_segments.fare_rule_id):
+Nếu is_refundable = true và số giờ còn lại ≥ refund_min_hours_before_departure thì hoàn refund_percent% của total_amount (số tiền khách đã trả).
+Ngược lại (không được hoàn hoặc hủy quá sát giờ bay) thì hoàn 0 đồng nhưng vẫn cho hủy trước giờ khởi hành.
+Luồng xử lý (một transaction):
+Kiểm tra booking thuộc CUSTOMER đang đăng nhập, trạng thái CONFIRMED hoặc PENDING_PAYMENT, và giờ hiện tại còn trước giờ khởi hành của chặng sớm nhất.
+Nếu PENDING_PAYMENT: chuyển CANCELLED, giải phóng ghế, trả voucher RESERVED về AVAILABLE, không hoàn tiền, kết thúc.
+Nếu CONFIRMED: lấy fare_rule của chặng sớm nhất, tính số giờ còn lại, chọn refund_percent (hoặc 0).
+refund_amount = làm tròn đến đồng của total_amount × refund_percent / 100.
+Cập nhật bookings: status = CANCELLED, cancelled_at, cancel_reason, applied_refund_percent, refund_amount.
+Nếu refund_amount > 0: cộng wallets.balance và ghi một dòng wallet_transactions (REFUND_CREDIT, booking_id, balance_after).
+seat_holds sang RELEASED, flight_seats sang AVAILABLE, e_tickets sang CANCELLED.
+Tạo notifications loại BOOKING_CANCELLED (nếu giữ bảng này) và gửi email.
+Ví dụ: booking total_amount 2.310.000đ, rule của loại vé là hủy trước ít nhất 24 giờ thì hoàn 80%.
+---TABLE---
+Thời điểm hủy | Số giờ còn lại | Phần trăm hoàn | Tiền vào ví
+Trước giờ bay 30 giờ | 30 ≥ 24 | 80% | 1.848.000đ
+Trước giờ bay 10 giờ | 10 < 24 | 0% | 0đ
+Loại vé không hoàn (is_refundable = false) | bất kỳ | 0% | 0đ
+---END---
+5.6 Phân quyền theo role
+Mỗi user đúng một role. CUSTOMER chỉ dùng khu vực khách hàng; ADMIN và STAFF mới được vào khu vực quản trị.
+ADMIN quản lý user/role/master data/voucher/khuyến mãi; STAFF xử lý chuyến bay và booking theo Permission Matrix.
+CUSTOMER có thêm quyền nhận voucher (VOUCHER_CLAIM) và xem ví của mình (WALLET_READ_SELF).
+5.7 Cấu hình sơ đồ ghế máy bay
+Lý thuyết: một máy bay có đúng một sơ đồ ghế, nên sơ đồ là thuộc tính của máy bay chứ không phải một danh mục để CRUD từng dòng. Một A320 có 180 ghế; nhập từng ghế bằng từng form là không thực tế, nên ADMIN thao tác theo cả sơ đồ. seat_types là danh mục nhỏ nên vẫn CRUD bình thường.
+Quy trình trong trang chi tiết phi cơ (tab “Sơ đồ ghế”):
+Tạo phi cơ trước (aircraft_code, model, seat_capacity). Sơ đồ ghế được cấu hình sau, ngay trên trang chi tiết của phi cơ đó.
+Khai báo theo khối: mỗi khối gồm hàng từ–đến, danh sách cột và loại ghế. Ví dụ “hàng 1–5, cột A C D F, Thương gia” và “hàng 6–30, cột A–F, Phổ thông”. Hệ thống sinh lưới ghế để xem trước, chưa ghi vào DB.
+Chỉnh lẻ trên lưới: bấm một ghế để đổi loại ghế hoặc bỏ ghế (ví dụ vị trí cửa thoát hiểm).
+Bấm Lưu: backend nhận cả danh sách ghế và ghi trong một transaction. Gợi ý API: GET và PUT /aircrafts/{id}/seat-map; PUT thay thế toàn bộ sơ đồ.
+Kiểm tra khi lưu:
+Không có hai ghế trùng (seat_row, seat_column); loại ghế tồn tại và đang is_active.
+Tổng số ghế bằng seat_capacity của phi cơ.
+Phi cơ chưa có dòng flight_seats nào trỏ tới aircraft_seats của nó. Nếu đã có thì từ chối: sửa sơ đồ sẽ làm đổi ghế của chuyến đang bán vì flight_seats lấy loại ghế từ aircraft_seats. Muốn đổi sơ đồ sau khi đã khai thác thì tạo phi cơ mới; quản lý nhiều phiên bản sơ đồ nằm ngoài phạm vi MVP.
+Phi cơ chưa có sơ đồ đủ ghế thì không được chọn khi tạo Flight, vì không sinh được Seat Inventory.
+6. Giả định đã chốt
+Các điểm bạn chưa nói rõ thì tài liệu lấy phương án đơn giản nhất; bạn đã đồng ý theo mặc định nên coi như đã chốt. Nếu sau này đổi ý, báo lại để sửa trước khi viết migration.
+---TABLE---
+# | Điểm | Mặc định đang dùng
+1 | Nhiều phi cơ cho một chuyến | Mỗi chuyến đúng 1 máy bay; khi cầu cao mở chuyến bổ sung nối bằng parent_flight_id (mục 5.1). Nếu muốn đúng nghĩa “1 chuyến, nhiều máy bay” (khách chỉ thấy 1 chuyến) thì cần bảng gán máy bay riêng.
+2 | Bảng notifications | Chưa triển khai giai đoạn này (chốt 2026-10-11): không tạo bảng, giữ mô tả trong tài liệu để làm chức năng thông báo sau.
+3 | Hoàn trên số tiền nào | Trên bookings.total_amount, tức số đã thanh toán sau khi trừ khuyến mãi và voucher, gồm cả phụ thu ghế và hành lý.
+4 | Vé khứ hồi | Hủy cả booking, tính theo giờ khởi hành của chặng sớm nhất và rule của chặng đó. Chưa hỗ trợ hủy từng chặng.
+5 | Thời hạn được hủy | Chỉ hủy được trước giờ khởi hành dự kiến.
+6 | Voucher khi hủy | Voucher của booking đã CONFIRMED không được trả lại; voucher của booking chưa thanh toán thì được trả lại nếu còn hạn.
+7 | Phụ thu ghế và hành lý | Không được giảm bởi khuyến mãi hay voucher.
+8 | Nhiều khuyến mãi cùng khớp | Chọn một khuyến mãi giảm nhiều nhất cho từng dòng vé, không cộng dồn.
+9 | Số voucher mỗi booking | Tối đa 1 voucher.
+10 | Dùng số dư ví | Chưa cho dùng ví để thanh toán booking mới (chỉ ghi nhận hoàn tiền). Chưa có rút tiền thì khách chưa dùng được số dư, nên cân nhắc làm sớm việc thanh toán bằng ví.
+11 | Làm tròn | Làm tròn đến đồng (HALF_UP).
+12 | Ngưỡng cảnh báo sắp hết ghế | Chưa chốt (gợi ý còn dưới 10%). Chỉ là logic Dashboard, không thêm bảng.
+13 | Khóa chính | Tên id, kiểu BIGINT IDENTITY, không dùng UUID (mục 2.2). API luôn kiểm tra quyền sở hữu.
+14 | Giá trẻ em và em bé | Trẻ em 75%, em bé 10% giá người lớn đã gồm thuế phí; đặt trong application.yml, chung cho mọi hãng. Hai con số là giá trị mặc định, đổi trong cấu hình khi cần.
+15 | Em bé và khuyến mãi / voucher | Em bé không được giảm. Trẻ em được giảm, tính trên giá đã nhân tỉ lệ.
+16 | Trần giảm và giá tối thiểu | Khuyến mãi: tính theo từng dòng vé (max_discount_amount, min_fare_amount). Voucher: tính theo cả booking (max_discount_amount, min_order_amount).
+17 | Loại hành trình | Cột applicable_trip_type (ANY / ONE_WAY / ROUND_TRIP) ở promotions và vouchers. Khứ hồi: khuyến mãi áp cho cả hai chặng nếu khớp phạm vi; ROUTE có hướng nên muốn áp cho cả hai chiều thì thêm dòng đảo.
+---END---
+Ngoài phạm vi v0.4: rút tiền từ ví, hoàn tiền thật qua cổng thanh toán, đổi chuyến / dời lịch, nhiều máy bay trong cùng một chuyến, nhiều phiên bản sơ đồ ghế cho cùng một máy bay, tự động tặng voucher theo sự kiện (ví dụ khi đăng ký), cộng dồn nhiều khuyến mãi trên cùng một dòng vé.
+7. Tài liệu khác cần sửa theo v0.4
+---TABLE---
+Tài liệu | Cần sửa
+Phase 1 Use Case Spec | Voucher: đổi loại “Code-based” thành GLOBAL (khách bấm Nhận), bỏ nhập mã; voucher có tên, mô tả, đơn tối thiểu (min_order_amount), trần giảm, phạm vi, loại hành trình. Promotion có phạm vi, loại trừ theo chuyến, trần giảm mỗi dòng vé, giá vé tối thiểu, loại hành trình, và ghi rõ em bé không được giảm. Thêm UC Claim Voucher và xem Kho voucher cho CUSTOMER. Seat Type CRUD đầy đủ (có bật/tắt và xóa mềm). Seat Configuration đổi thành màn hình “Sơ đồ ghế” trong trang chi tiết Aircraft (khai báo theo khối, xem trước, lưu thay thế toàn bộ, khóa khi đã có chuyến), không còn CRUD từng ghế.
+Phase 2 Use Case Spec | FlightFare chỉ nhập “Base Fare, Tax & Fee” của người lớn (một dòng cho mỗi chuyến + loại vé); màn hình hiển thị thêm giá trẻ em và em bé là kết quả tính theo tỉ lệ cố định; FareRule thêm is_refundable, giờ tối thiểu trước giờ bay và phần trăm hoàn; Flight có chuyến gốc cho chuyến bổ sung; chỉ chọn được Aircraft đã có sơ đồ ghế đủ seat_capacity.
+Phase 3 Use Case Spec | Apply Voucher chọn từ ví, không nhập mã; Price Snapshot theo bảng giá chi tiết của booking và theo từng loại hành khách (mục 5.3); Cancel Booking viết lại theo mục 5.5 (có hoàn vào ví); thêm UC xem ví và lịch sử giao dịch; mục ngoài phạm vi đổi thành “Rút tiền từ ví, hoàn tiền thật qua cổng”.
+Permission Matrix | Thêm VOUCHER_CLAIM và WALLET_READ_SELF cho CUSTOMER; giữ VOUCHER_APPLY.
+API Design (v0.1 → v0.2) | Cập nhật theo v0.4: voucher bỏ code-based, thêm voucher_name/description/min_order_amount/max_discount_amount/applicable_trip_type; thêm endpoint Claim voucher và Kho voucher cho CUSTOMER; thêm GET/PUT sơ đồ ghế của phi cơ (/aircrafts/{id}/seat-map); thêm Ví + lịch sử giao dịch; flight-fares trả sẵn 3 giá ADULT/CHILD/INFANT; bỏ endpoint notifications. Bump lên v0.2.
+Danh sách toàn bộ UI | Thêm màn hình: Sơ đồ ghế trong chi tiết Aircraft (khai báo theo khối + xem trước), Kho voucher + nút Nhận, Voucher của tôi, Ví + lịch sử giao dịch; cập nhật form Voucher/Promotion (phạm vi, loại trừ, trần giảm, min, loại hành trình); FlightFare hiển thị 3 giá theo loại hành khách.
+---END---
+8. Kế hoạch migration (Flyway)
+V1–V3 đã chạy thành công trên Aiven nên không sửa (Flyway kiểm tra checksum và sẽ báo lỗi). Mọi thay đổi đi qua migration mới. Đổi tên dùng ALTER TABLE ... RENAME, không tạo lại bảng, để giữ dữ liệu. Các thay đổi của v0.4 được gộp thẳng vào các migration dưới đây vì V4 trở đi chưa chạy.
+V4 — users, roles và dữ liệu nền: thêm users.role_id (backfill từ user_roles) rồi bỏ user_roles; đổi status ACTIVE/INACTIVE sang is_active; thêm is_deleted / deleted_at và created_at / updated_at; RENAME seat_configurations thành aircraft_seats và đổi cột seat_row, seat_column; đổi cột seat_types, fare_classes, promotions theo mục 1.4; thêm cho seat_types các cột is_active, is_deleted, deleted_at, created_at / updated_at (partial unique cho seat_type_code); thêm UNIQUE (aircraft_id, seat_row, seat_column).
+V5 — chuyến bay và giá: flights (operation_status, sales_status, parent_flight_id); flight_seats (aircraft_seat_id, seat_surcharge, BLOCKED, version); flight_fares tái cấu trúc thành base_fare, tax_fee, effective_from / effective_to và KHÔNG có passenger_type (backfill giá cũ chỉ lấy các dòng ADULT).
+V6 — fare_rules: tạo bảng, seed một rule mặc định cho mỗi loại vé.
+V7 — khuyến mãi và voucher: tạo promotion_scopes, promotion_excluded_flights, voucher_scopes, voucher_excluded_flights; promotions thêm max_discount_amount, min_fare_amount, applicable_trip_type (mặc định ANY); vouchers đổi/thêm cột (gồm min_order_amount và applicable_trip_type); user_vouchers thêm cột và trạng thái RESERVED; chuyển dữ liệu voucher_usages sang user_vouchers rồi DROP voucher_usages.
+V8 — đặt vé: RENAME booking_flights thành booking_segments (thêm fare_rule_id, promotion_id, promotion_discount_amount); bookings (bảng giá chi tiết, payment_expires_at, cột hủy/hoàn); seat_holds (passenger_id, hold_expires_at, surcharge_at_booking); booking_baggages, payments, e_tickets đổi cột; UNIQUE còn thiếu.
+V9 — wallets, wallet_transactions (tạo ví số dư 0 cho CUSTOMER hiện có). Bảng notifications chưa triển khai (để sau).
+Phía code: bỏ entity và repository của user_roles và voucher_usages; đổi tên entity SeatConfiguration thành AircraftSeat và BookingFlight thành BookingSegment; thêm entity FareRule, PromotionScope, PromotionExcludedFlight, VoucherScope, VoucherExcludedFlight, Wallet, WalletTransaction (Notification để sau); cập nhật enum FlightOperationStatus, SalesStatus, SeatStatus, NewsStatus, UserVoucherStatus (thêm RESERVED), thêm enum TripTypeCondition (ANY, ONE_WAY, ROUND_TRIP); sửa User, Flight, FlightFare (bỏ passenger_type), SeatType (thêm active/soft delete), Promotion, Voucher, UserVoucher, SeatHold, ETicket, Booking.
+Thêm lớp cấu hình PricingProperties (@ConfigurationProperties prefix “app.pricing”) chứa child-fare-percent và infant-fare-percent, dùng trong service tính giá; thêm API GET/PUT sơ đồ ghế của phi cơ (mục 5.7) thay cho CRUD từng ghế.
+— Hết tài liệu —
