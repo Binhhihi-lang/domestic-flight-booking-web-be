@@ -307,7 +307,7 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 | 4 | Auth & Account | 3 | ✅ 13/10/2026 |
 | 5 | Profile + User Management + RBAC | 4 | ✅ 13/10/2026 |
 | 6 | Master Data (Airline mẫu → 5 module) | 2 | ✅ 13/10/2026 |
-| 7 | Promotion + Voucher + News | 6 | ⬜ |
+| 7 | Promotion + Voucher + News | 6 | ✅ 13/10/2026 |
 | 8 | Test, hardening, tài liệu | 4–7 | ⬜ |
 | + | **V10** — ảnh News/City/Promotion + `permissions.module` + 2 quyền mới | 1 | ✅ 12/10/2026 |
 
@@ -378,6 +378,14 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 - **BUG #1 ĐÃ SỬA (nghiêm trọng):** V3 seed ID cố định nhưng sequence IDENTITY không tiến → `INSERT` mới đụng `airlines_pkey`. Thêm `V11__reset_identity_sequences.sql` `setval` cho 7 bảng seed (roles, permissions, airlines, cities, airports, fare_classes, seat_types).
 - **BUG #2 ĐÃ SỬA:** `@PreAuthorize('*_READ_DETAIL')` trên GET detail Airline/City/Airport chặn cả GUEST — sai spec (mục 2.5 ghi **P** = public cho cả GET list lẫn detail). Đã bỏ `@PreAuthorize` ở GET detail 3 module này.
 - **Đã verify E2E thật (curl):** 11/11 case — GET public không token 1000 (airlines/airlines{id}/cities{id}/airports{id}, city lồng đúng); POST/DELETE không token 1002; Aircraft không token 1002 (không public); CUSTOMER GET public 1000 nhưng POST 1003. SeatMap: PUT 4 ghế = capacity 1000, GET configured_seats=4, PUT ≠capacity 1006, trùng vị trí 1006, DELETE seat-type đang dùng 1006. `mvn test` → **26/26 pass**.
+
+**Ghi chú Cụm 7 (13/10/2026):**
+- Thêm dep **jsoup 1.18.3** (open item #3) + `common/HtmlSanitizer` (Safelist.relaxed, chặn script/iframe/event handler) — sanitize `news_items.content`.
+- **Promotion**: CRUD + scopes/excluded (PUT thay toàn bộ); GET công khai chỉ thấy đang hiệu lực (`is_active` + trong khoảng ngày), ADMIN filter `is_active`. Validate: `end_date>=start_date`, `discount_value>0`, PERCENT≤100, trần>0, min≥0 → 1006.
+- **Voucher**: CRUD + `voucher_scopes`/`voucher_excluded_flights`; **Claim** dùng `UPDATE ... WHERE claim_limit IS NULL OR claimed_count < claim_limit` (1 dòng mới tạo `user_vouchers`) → hết lượt 1006, nhận trùng 1005; `GET /voucher-store` (GLOBAL đang hiệu lực + còn lượt + cờ `claimed`); `GET /my-vouchers` (SELF, không nhận user_id từ client); `POST /vouchers/{id}/assign` (ASSIGNED, bỏ qua user đã có). Chỉ claim được GLOBAL; chỉ assign được ASSIGNED → 1006.
+- **News**: `entity/NewsCategoryMapping` + repo (bảng nối N—N); tạo mặc định DRAFT; **publish** cần ≥1 chuyên mục → 1006; **unpublish** về DRAFT giữ `published_at`; public list chỉ PUBLISHED. **NewsCategory KHÔNG public**, DELETE chặn khi còn bài viết → 1006.
+- **Đã verify E2E thật (curl):** Promotion 5/5 (tạo 1000, public GET có scopes, percent>100 1006, scope thiếu airline_id 1001); Voucher 11/11 (claim 1000, claim lại 1005, **hết lượt 1006**, store ẩn khi hết lượt, assign ASSIGNED 1000, assign GLOBAL 1006, my-vouchers có voucher tặng); News 8/8 (**XSS `<script>` bị strip**, DRAFT không lộ ra public, publish 1000, public thấy bài, unpublish về DRAFT + ẩn khỏi public, xóa category còn bài 1006). `mvn test` → **26/26 pass**.
+- **Lưu ý:** lỗi "publish 1006" khi test lần đầu là do **script test parse id sai** (sed tham lam), không phải bug code — đã xác nhận lại bằng parse JSON đúng.
 
 ---
 
