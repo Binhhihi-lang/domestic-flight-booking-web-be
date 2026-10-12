@@ -302,7 +302,7 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 |---|---|---|---|
 | 0 | Hạ tầng dev (Docker Redis+Postgres, pom dep) | — | ✅ 12/10/2026 |
 | 1 | Migration V4→V9 + refactor entity/repo | 0 | ✅ 12/10/2026 |
-| 2 | Lớp nền common (ApiResponse, exception, BaseCrud) | 1 | ⬜ |
+| 2 | Lớp nền common (ApiResponse, exception, BaseCrud) | 1 | ✅ 12/10/2026 |
 | 3 | Security + JWT + Redis token | 2 | ⬜ |
 | 4 | Auth & Account | 3 | ⬜ |
 | 5 | Profile + User Management + RBAC | 4 | ⬜ |
@@ -324,6 +324,13 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 - **Đã verify:** `mvn clean compile` pass + app start profile `local` với `ddl-auto=validate` **pass** (bằng chứng entity khớp schema v0.4).
 - **Lưu ý kỹ thuật:** (1) Postgres rename FK phải dùng `ALTER TABLE ... RENAME CONSTRAINT`, không phải `ALTER INDEX`. (2) `flight_fares` dùng `EXCLUDE USING gist` → cần extension `btree_gist` (migration V5 tự `CREATE EXTENSION IF NOT EXISTS`). (3) `bookings` v0 **không có** cột `expires_at` → V8 phải `ADD COLUMN payment_expires_at` (không phải rename).
 - **Chưa chạy lên Aiven** (đúng quyết định #3). Thêm `application-local.properties` (profile `local`) trỏ Docker Postgres/Redis để test không cần biến môi trường.
+
+**Ghi chú Cụm 2 (12/10/2026):**
+- `common/`: `ApiResponse<T>` (envelope `{code,message,data}`, static factory `success/error`; **không** `@JsonInclude(NON_NULL)` — hợp đồng 1.2 yêu cầu field null luôn có mặt), `PageData<T>` (record `items` + `pagination{page,size,total_items,total_pages}`), `ListQuery` (page 1-based, size kẹp ≤100, parse `sort=field,dir`, whitelist sort), `PageMapper` (Spring `Page` 0-based → API 1-based; `toPageable` bỏ qua sort ngoài whitelist theo BR-LIST-03).
+- `exception/`: `ErrorCode` (9 mã 1000–1008 + 9999, kèm HTTP status), `AppException` + `BusinessException`(1006)/`ResourceNotFoundException`(1004)/`DuplicateResourceException`(1005), `GlobalExceptionHandler` (`@RestControllerAdvice`; validate → 1001 với `data` là mảng `{field,message}`; `DataIntegrityViolation` → 1005; lỗi lạ → 9999 không lộ stack trace).
+- `service/BaseCrudService<T,ID,Req,Resp>` + `controller/BaseCrudController<T,ID,Req,Resp>` — 6 hook cho module con (resourceName/toResponse/createEntity/updateEntity/softDelete/setActive/search). Thêm endpoint `PUT /{id}/active?value=` để toggle `is_active`.
+- **snake_case JSON**: Boot 4 dùng Jackson 3 (`tools.jackson`) — `Jackson2ObjectMapperBuilderCustomizer` **không còn**; dùng property `spring.jackson.property-naming-strategy=SNAKE_CASE` trong `application.properties` (đã thêm), không cần class Java.
+- **Đã verify:** `mvn test` → **19/19 pass** (ListQuery 8, PageMapper 5, GlobalExceptionHandler 5, placeholder 1). Test `contextLoads` cũ đổi thành placeholder vì `@SpringBootTest` cần DB+Redis thật.
 
 ---
 
