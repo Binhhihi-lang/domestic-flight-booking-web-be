@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
 
@@ -90,8 +91,8 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ErrorCode.UNAUTHENTICATED));
     }
 
-    @ExceptionHandler(NoHandlerFoundException.class)
-    public ResponseEntity<ApiResponse<Void>> handleNoHandler(NoHandlerFoundException ex) {
+    @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})
+    public ResponseEntity<ApiResponse<Void>> handleNoHandler(Exception ex) {
         return ResponseEntity.status(ErrorCode.RESOURCE_NOT_FOUND.getHttpStatus())
                 .body(ApiResponse.error(ErrorCode.RESOURCE_NOT_FOUND, "Đường dẫn không tồn tại"));
     }

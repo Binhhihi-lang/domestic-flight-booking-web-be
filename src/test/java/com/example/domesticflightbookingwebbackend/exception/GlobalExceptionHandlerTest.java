@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.lang.reflect.Method;
 import java.util.List;
@@ -78,6 +79,19 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(response.getBody().getCode()).isEqualTo(9999);
         assertThat(response.getBody().getMessage()).doesNotContain("chi tiết nội bộ nhạy cảm");
+    }
+
+    @Test
+    void duongDanKhongTonTai_traMa1004ChuKhongPhai9999() {
+        // Spring 6 ném NoResourceFoundException khi path không khớp handler nào —
+        // phải map thành 1004, không được để rơi vào handler Exception chung (9999).
+        NoResourceFoundException ex = new NoResourceFoundException(
+                org.springframework.http.HttpMethod.GET, "api/v1/khong-ton-tai", "/api/v1/khong-ton-tai");
+
+        ResponseEntity<ApiResponse<Void>> response = handler.handleNoHandler(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody().getCode()).isEqualTo(1004);
     }
 
     private MethodArgumentNotValidException buildValidationException() throws NoSuchMethodException {
