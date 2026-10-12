@@ -21,6 +21,10 @@ public class NewsItem {
     @Column(name = "content", columnDefinition = "TEXT", nullable = false)
     private String content;
 
+    /** Ảnh đại diện hiển thị ở thẻ tin trang chủ / trang danh sách. */
+    @Column(name = "thumbnail_url", length = 500)
+    private String thumbnailUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 15)
     private NewsStatus status = NewsStatus.DRAFT;

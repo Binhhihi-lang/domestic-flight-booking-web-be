@@ -178,3 +178,62 @@ Giới hạn 2 MB ở FE vì data URL phình ~33% và đi kèm payload JSON.
    `discount_type` + `discount_value` và bỏ nhãn marketing? (Xem mục 3.)
 5. Xác nhận `V4` sẽ là migration nâng schema v0.1 → v0.4, để `V5` này không
    đánh số sai.
+
+---
+
+## 7. Phản hồi của BE (12/10/2026) — ĐÃ CHỐT
+
+### 7.1 Số hiệu migration: dùng **V10**, không phải V5
+
+Repo BE **đã dùng hết V4–V9** cho việc nâng schema v0.1 → v0.4 (Cụm 1):
+`V4` users/RBAC + master rename · `V5` flights/fares · `V6` fare_rules ·
+`V7` promotion/voucher scopes · `V8` booking core · `V9` wallets.
+
+→ Phần bổ sung này là **`V10__content_images_and_permission_module.sql`**.
+(Câu hỏi #5 ở mục 6 đã được trả lời: V4 chính là migration nâng lên v0.4, và
+đã chạy xong trên Postgres local.)
+
+### 7.2 Năm cột ảnh/mô tả/nhãn — **ĐỒNG Ý CẢ 5**
+
+Đúng như đề xuất ở mục 2: `news_items.thumbnail_url`, `cities.image_url`,
+`promotions.image_url`, `promotions.description`, `promotions.badge_label`
+(đều `VARCHAR(500)` / `VARCHAR(30)`, nullable, không index).
+
+Trả lời các câu hỏi:
+- **#2 `cities.image_url` cho "tuyến bay phổ biến"** — đúng, không tạo bảng
+  `routes`. DB v0.4 không có bảng tuyến; tuyến chỉ là cặp thành phố.
+- **#3 `news_items.summary`** — **không thêm**. FE tự cắt `content` là đủ cho
+  thẻ tin trang chủ; thêm cột nữa là thừa ở Phase 1. Nếu sau này ADMIN cần
+  kiểm soát mô tả riêng thì mở migration mới.
+- **#4 `promotions.badge_label`** — **đồng ý thêm**. Chi phí một `VARCHAR(30)`
+  nhỏ, đổi lại ADMIN đổi được nhãn marketing ("Giá sốc", "Đồng giá") mà FE
+  không phải hardcode.
+
+### 7.3 Bổ sung ngoài đề xuất: `permissions.module` + 2 quyền còn thiếu
+
+Khi rà soát lại API Design v0.2 mục 2.4, phát hiện **doc đã hứa** hai thứ mà
+schema chưa có:
+
+1. **`permissions.module`** — API v0.2 mục 2.4 cho phép `GET /permissions?module=AUTH`
+   và trả `module` trong response (`{"permission_key": "LOGIN", "module": "AUTH"}`).
+   Nhưng bảng `permissions` (cả DB v0.4 A.3) chỉ có `id`, `permission_key`,
+   `description`. → **Thêm cột `module VARCHAR(30)`, backfill theo nhóm có sẵn
+   trong V2 seed** (AUTH, USER, AIRLINE, CITY, AIRPORT, AIRCRAFT, SEAT_CONFIG,
+   PROMOTION, VOUCHER, NEWS, FLIGHT, FARE, BAGGAGE, FLIGHT_FARE, SEAT_INVENTORY,
+   PASSENGER, BOOKING, PAYMENT, ETICKET, DASHBOARD).
+2. **2 quyền `VOUCHER_CLAIM` + `WALLET_READ_SELF`** — DB v0.4 A.3 ghi rõ "Cần
+   seed thêm 2 quyền mới... cấp cho CUSTOMER", nhưng V2 seed không có và V4–V9
+   cũng chưa thêm. → **Seed ngay trong V10, gán cho CUSTOMER.**
+
+### 7.4 Việc FE cần làm sau khi BE xong V10
+
+- `City` model thêm `image_url` (mục 5 đang chờ BE xác nhận — nay đã xác nhận).
+- Khi BE có endpoint upload Cloudinary, đổi chỗ đọc file thành gọi upload.
+- Màn RBAC (nếu làm) đọc thêm trường `module` từ `GET /permissions`.
+
+### 7.5 Phạm vi tài liệu
+
+**Không sửa `Database_Design_..._v0.4.docx`** — giữ nguyên làm chuẩn gốc.
+Phần bổ sung này sống trong file đề xuất này + migration `V10`, truy vết được
+qua `flyway_schema_history`. Nguồn sự thật cho code là **migration + entity**,
+không phải docx.

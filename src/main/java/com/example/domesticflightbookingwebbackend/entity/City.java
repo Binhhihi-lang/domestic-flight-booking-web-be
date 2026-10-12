@@ -24,6 +24,10 @@ public class City {
     @Column(name = "country", nullable = false, length = 100)
     private String country;
 
+    /** Ảnh đại diện thành phố — dùng cho khối "Tuyến bay phổ biến" ở trang chủ. */
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
+
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 

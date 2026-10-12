@@ -19,4 +19,8 @@ public class Permission {
 
     @Column(name = "description", length = 255)
     private String description;
+
+    /** Nhóm module để lọc/sắp xếp catalog quyền (API v0.2 mục 2.4), ví dụ AUTH, AIRLINE. */
+    @Column(name = "module", nullable = false, length = 30)
+    private String module;
 }

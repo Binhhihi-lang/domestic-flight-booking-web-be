@@ -23,6 +23,18 @@ public class Promotion {
     @Column(name = "promotion_name", nullable = false, length = 150)
     private String promotionName;
 
+    /** Ảnh hiển thị trên thẻ khuyến mãi ở trang chủ. */
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
+
+    /** Dòng mô tả ngắn trên thẻ khuyến mãi. */
+    @Column(name = "description", length = 500)
+    private String description;
+
+    /** Nhãn marketing ngắn ("Giá sốc", "Đồng giá") — ADMIN đặt, FE không suy ra được. */
+    @Column(name = "badge_label", length = 30)
+    private String badgeLabel;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "discount_type", nullable = false, length = 10)
     private DiscountType discountType;
