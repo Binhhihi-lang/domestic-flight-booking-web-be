@@ -19,7 +19,7 @@ public class Role {
     @Column(name = "name", nullable = false, length = 50, unique = true)
     private String name;
 
-    @Column(name = "description", nullable = true, length = 255)
+    @Column(name = "description", length = 255)
     private String description;
 
     @ManyToMany

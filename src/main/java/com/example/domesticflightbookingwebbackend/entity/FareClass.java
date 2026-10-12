@@ -1,6 +1,6 @@
 package com.example.domesticflightbookingwebbackend.entity;
 
-
+import java.time.LocalDateTime;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -15,13 +15,28 @@ public class FareClass {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "class_code", nullable = false, length = 30, unique = true)
-    private String classCode;
+    @Column(name = "fare_class_code", nullable = false, length = 30)
+    private String fareClassCode;
 
-    @Column(name = "class_name", nullable = false, length = 100)
-    private String className;
+    @Column(name = "fare_class_name", nullable = false, length = 100)
+    private String fareClassName;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "seat_class", nullable = false, length = 20)
     private SeatClass seatClass;
+
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
+    @Column(name = "is_deleted", nullable = false)
+    private Boolean isDeleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt = LocalDateTime.now();
 }

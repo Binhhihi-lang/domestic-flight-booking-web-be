@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+/** Tồn ghế của một chuyến bay: một dòng là một ghế vật lý trên chuyến đó. */
 @Getter
 @Setter
 @Entity
@@ -20,16 +21,21 @@ public class FlightSeat {
     private Flight flight;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "seat_config_id", nullable = false)
-    private SeatConfiguration seatConfiguration;
+    @JoinColumn(name = "aircraft_seat_id", nullable = false)
+    private AircraftSeat aircraftSeat;
 
     @Column(name = "seat_code", nullable = false, length = 10)
     private String seatCode;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "status", nullable = false, length = 10)
     private FlightSeatStatus status = FlightSeatStatus.AVAILABLE;
 
-    @Column(name = "price_at_time", nullable = true, precision = 12, scale = 2)
-    private BigDecimal priceAtTime;
+    /** Phụ thu khi chọn ghế này (0 = không phụ thu). */
+    @Column(name = "seat_surcharge", nullable = false, precision = 12, scale = 2)
+    private BigDecimal seatSurcharge = BigDecimal.ZERO;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
 }

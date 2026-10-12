@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+/** Một lần thanh toán (attempt) của booking; thanh toán lại tạo dòng mới. */
 @Getter
 @Setter
 @Entity
@@ -29,14 +30,14 @@ public class Payment {
     @Column(name = "payment_method", nullable = false, length = 50)
     private String paymentMethod;
 
-    @Column(name = "provider", nullable = true, length = 50)
-    private String provider;
+    @Column(name = "gateway_name", length = 50)
+    private String gatewayName;
 
-    @Column(name = "gateway_ref", nullable = true, length = 150)
-    private String gatewayRef;
+    @Column(name = "gateway_transaction_id", length = 150)
+    private String gatewayTransactionId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "status", nullable = false, length = 10)
     private PaymentStatus status = PaymentStatus.PENDING;
 
     @Column(name = "retry_count", nullable = false)
@@ -45,6 +46,6 @@ public class Payment {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    @Column(name = "paid_at", nullable = true)
+    @Column(name = "paid_at")
     private LocalDateTime paidAt;
 }

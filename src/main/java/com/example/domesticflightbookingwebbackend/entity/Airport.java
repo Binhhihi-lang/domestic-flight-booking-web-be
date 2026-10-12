@@ -1,6 +1,7 @@
 package com.example.domesticflightbookingwebbackend.entity;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -15,7 +16,7 @@ public class Airport {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "airport_code", nullable = false, length = 10, unique = true)
+    @Column(name = "airport_code", nullable = false, length = 10)
     private String airportCode;
 
     @Column(name = "airport_name", nullable = false, length = 150)
@@ -25,9 +26,24 @@ public class Airport {
     @JoinColumn(name = "city_id", nullable = false)
     private City city;
 
-    @Column(name = "latitude", nullable = true, precision = 9, scale = 6)
+    @Column(name = "latitude", precision = 9, scale = 6)
     private BigDecimal latitude;
 
-    @Column(name = "longitude", nullable = true, precision = 9, scale = 6)
+    @Column(name = "longitude", precision = 9, scale = 6)
     private BigDecimal longitude;
+
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
+    @Column(name = "is_deleted", nullable = false)
+    private Boolean isDeleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt = LocalDateTime.now();
 }

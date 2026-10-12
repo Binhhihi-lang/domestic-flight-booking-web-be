@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+/** Vé điện tử: vé của một hành khách trên một chặng bay. PNR lấy từ bookings.booking_code. */
 @Getter
 @Setter
 @Entity
@@ -20,22 +21,23 @@ public class ETicket {
     private Booking booking;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "booking_flight_id", nullable = false)
-    private BookingFlight bookingFlight;
+    @JoinColumn(name = "booking_segment_id", nullable = false)
+    private BookingSegment bookingSegment;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "passenger_id", nullable = false)
     private Passenger passenger;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = true)
-    @JoinColumn(name = "flight_seat_id", nullable = true)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "flight_seat_id")
     private FlightSeat flightSeat;
-
-    @Column(name = "pnr_code", nullable = false, length = 20, unique = true)
-    private String pnrCode;
 
     @Column(name = "ticket_code", nullable = false, length = 30, unique = true)
     private String ticketCode;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 10)
+    private ETicketStatus status = ETicketStatus.ISSUED;
 
     @Column(name = "issued_at", nullable = false)
     private LocalDateTime issuedAt = LocalDateTime.now();

@@ -21,10 +21,22 @@ public class NewsItem {
     @Column(name = "content", columnDefinition = "TEXT", nullable = false)
     private String content;
 
-    @Column(name = "published_at", nullable = true)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 15)
+    private NewsStatus status = NewsStatus.DRAFT;
+
+    @Column(name = "published_at")
     private LocalDateTime publishedAt;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
-    private NewsStatus status = NewsStatus.DRAFT;
+    @Column(name = "is_deleted", nullable = false)
+    private Boolean isDeleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt = LocalDateTime.now();
 }

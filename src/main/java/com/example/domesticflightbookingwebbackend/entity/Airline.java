@@ -1,13 +1,7 @@
 package com.example.domesticflightbookingwebbackend.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import java.time.LocalDateTime;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -21,19 +15,30 @@ public class Airline {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "airline_code", nullable = false, unique = true, length = 10)
+    @Column(name = "airline_code", nullable = false, length = 10)
     private String airlineCode;
 
     @Column(name = "airline_name", nullable = false, length = 150)
     private String airlineName;
 
-    @Column(length = 100)
+    @Column(name = "country", length = 100)
     private String country;
 
     @Column(name = "logo_url", length = 500)
     private String logoUrl;
 
-    @Enumerated(EnumType.STRING)
-    @Column(length = 20, nullable = false)
-    private Status status = Status.ACTIVE;
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
+    @Column(name = "is_deleted", nullable = false)
+    private Boolean isDeleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt = LocalDateTime.now();
 }

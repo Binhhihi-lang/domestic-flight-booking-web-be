@@ -41,9 +41,27 @@ public class Flight {
     private LocalDateTime scheduledArrival;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
-    private FlightStatus status = FlightStatus.SCHEDULED;
+    @Column(name = "operation_status", nullable = false, length = 15)
+    private FlightOperationStatus operationStatus = FlightOperationStatus.DRAFT;
 
-    @Column(name = "sale_open", nullable = false)
-    private Boolean saleOpen = true;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sales_status", nullable = false, length = 10)
+    private SalesStatus salesStatus = SalesStatus.CLOSED;
+
+    /** Chuyến bổ sung trỏ về chuyến gốc cùng tuyến/giờ (NULL = chuyến thường). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_flight_id")
+    private Flight parentFlight;
+
+    @Column(name = "is_deleted", nullable = false)
+    private Boolean isDeleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt = LocalDateTime.now();
 }

@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+/** Gói hành lý mà từng hành khách đã chọn trong booking. */
 @Getter
 @Setter
 @Entity
@@ -30,8 +31,9 @@ public class BookingBaggage {
     @Column(name = "quantity", nullable = false)
     private Integer quantity = 1;
 
-    @Column(name = "price_snapshot", nullable = false, precision = 12, scale = 2)
-    private BigDecimal priceSnapshot;
+    /** Giá một gói tại thời điểm đặt. */
+    @Column(name = "unit_price_at_booking", nullable = false, precision = 12, scale = 2)
+    private BigDecimal unitPriceAtBooking;
 
     @Column(name = "currency", nullable = false, length = 3)
     private String currency = "VND";

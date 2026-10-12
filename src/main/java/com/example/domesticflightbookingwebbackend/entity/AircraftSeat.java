@@ -1,15 +1,15 @@
 package com.example.domesticflightbookingwebbackend.entity;
 
-
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+/** Một ghế vật lý của máy bay (v0.4 đổi tên từ seat_configurations). */
 @Getter
 @Setter
 @Entity
-@Table(name = "seat_configurations")
-public class SeatConfiguration {
+@Table(name = "aircraft_seats")
+public class AircraftSeat {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -23,9 +23,9 @@ public class SeatConfiguration {
     @JoinColumn(name = "seat_type_id", nullable = false)
     private SeatType seatType;
 
-    @Column(name = "row_number", nullable = false)
-    private Integer rowNumber;
+    @Column(name = "seat_row", nullable = false)
+    private Integer seatRow;
 
-    @Column(name = "column_code", nullable = false, length = 5)
-    private String columnCode;
+    @Column(name = "seat_column", nullable = false, length = 2)
+    private String seatColumn;
 }

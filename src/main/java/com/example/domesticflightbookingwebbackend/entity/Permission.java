@@ -1,6 +1,5 @@
 package com.example.domesticflightbookingwebbackend.entity;
 
-
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -18,6 +17,6 @@ public class Permission {
     @Column(name = "permission_key", nullable = false, length = 100, unique = true)
     private String permissionKey;
 
-    @Column(name = "description", nullable = true, length = 255)
+    @Column(name = "description", length = 255)
     private String description;
 }
