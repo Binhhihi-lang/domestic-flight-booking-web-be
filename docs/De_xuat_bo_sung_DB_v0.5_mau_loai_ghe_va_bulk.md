@@ -149,3 +149,59 @@ Nếu Bình thấy all-or-nothing dễ làm hơn (một transaction, rollback c�
 3. **Kết quả bulk** — trả **từng phần** (`succeeded` + `failed`) hay **all-or-nothing** (rollback cả lô nếu một bản ghi vi phạm)?
 4. **Giới hạn số id** mỗi lần gọi — 100 có hợp lý không?
 5. **Bulk áp cho module nào** — danh sách 10 module ở mục 2.2 có đúng không, hay chỉ một số?
+
+---
+
+## 3. `GET /news-categories` cần mở cho khách (hoặc endpoint public riêng)
+
+### 3.1 Vấn đề
+
+Trang **Tin tức cho khách** cần dropdown lọc theo danh mục. Nhưng API v0.2 mục 2.9 ghi:
+
+> `GET /api/v1/news-categories` | A — `NEWS_CATEGORY_READ`
+> *"`GET` danh sách theo UC NEWS-CAT-01 là **ADMIN** (khác News — category không public)"*
+
+Khách gọi endpoint này sẽ bị `1003` (ACCESS_DENIED).
+
+### 3.2 FE đang xử lý thế nào
+
+Suy danh mục từ chính dữ liệu `GET /news` trả về (mỗi item có `categories` lồng). Hệ quả: dropdown chỉ liệt kê danh mục **có bài đã đăng**. Với một bộ lọc thì đó là hành vi hợp lý (lọc danh mục rỗng luôn ra 0 bài), nhưng nó không phải cách làm sạch.
+
+### 3.3 Đề xuất — chọn một
+
+- **(a)** Đổi `GET /news-categories` thành **public** (`P — NEWS_CATEGORY_READ`). Đơn giản nhất. Nhưng lưu ý: endpoint này trả cả danh mục `INACTIVE` và có `description` — cân nhắc có nên lọc `is_active = true` cho khách không.
+- **(b)** Thêm endpoint public riêng: `GET /api/v1/news-categories/public` — chỉ trả danh mục đang hoạt động, chỉ `id` + `category_name`. Sạch hơn về mặt phân quyền: endpoint ADMIN giữ nguyên hình dạng, khách có endpoint riêng tối giản.
+- **(c)** Giữ nguyên, FE tiếp tục suy từ `GET /news`.
+
+**Tôi nghiêng về (b)**: phân quyền rõ ràng, và endpoint public không lộ `description`/`is_active` vốn chỉ có nghĩa với ADMIN. Nhưng (a) cũng chấp nhận được nếu Bình muốn ít endpoint.
+
+---
+
+## 4. `GET /news/{id}` phải chặn bài `DRAFT` cho khách — BUG BẢO MẬT
+
+### 4.1 Vấn đề
+
+**Đây là lỗi, không phải đề xuất tính năng.**
+
+NEWS-01 quy định GUEST/CUSTOMER chỉ thấy `status = PUBLISHED`. Điều này được áp ở `GET /news` (danh sách) — API v0.2 mục 2.9 ghi rõ. Nhưng tài liệu **không nói** `GET /news/{id}` (chi tiết) có chặn `DRAFT` hay không.
+
+Thực tế khi kiểm chứng trên mock: mở `/news/5` (bài có `status = DRAFT`) → **khách đọc được toàn bộ nội dung bài nháp**. Chỉ cần đoán id.
+
+Nếu backend cũng không chặn ở `GET /news/{id}` thì đây là lỗ hổng: bài chưa duyệt, có thể chứa nội dung sai/giá nội bộ, lộ cho bất kỳ ai đoán được id.
+
+### 4.2 Đề xuất
+
+`GET /news/{id}` khi người gọi là GUEST/CUSTOMER: nếu `status != PUBLISHED` → trả **`1004` (RESOURCE_NOT_FOUND)**, KHÔNG phải `1003`.
+
+**Vì sao `1004` chứ không `1003`:** `1003` (ACCESS_DENIED) xác nhận "bài này CÓ tồn tại nhưng bạn không được xem" — kẻ tấn công học được là id đó hợp lệ, dùng để dò id. `1004` không tiết lộ gì. Cùng nguyên tắc với `/auth/login` không phân biệt "sai email" và "sai mật khẩu" (API v0.2 mục 2.1).
+
+### 4.3 Trạng thái phía FE
+
+FE đã chặn ở client (`news-detail.ts` kiểm tra `status !== 'PUBLISHED'` → điều hướng về danh sách) và có test phủ. Nhưng **đây chỉ là lớp chặn giao diện** — dữ liệu vẫn đi qua mạng, ai xem Network tab vẫn đọc được. Chốt cuối phải ở backend.
+
+---
+
+## 5. Việc cần Bình xác nhận (bổ sung)
+
+6. **`GET /news-categories`** — chọn (a) mở public, (b) thêm endpoint `/public` riêng, hay (c) giữ nguyên để FE tự suy? (Xem mục 3.)
+7. **`GET /news/{id}` chặn `DRAFT`** — xác nhận có chặn và trả `1004` chứ không `1003`? (Xem mục 4 — đây là lỗi bảo mật, nên ưu tiên.)
