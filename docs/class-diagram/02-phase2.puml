@@ -1,0 +1,304 @@
+@startuml 02-Phase2
+' ===================================================================
+' SƠ ĐỒ LỚP — 02. PHASE 2: FLIGHT & FARE
+' Website Đặt Vé Máy Bay Nội Địa — DB v0.5 / API v0.4
+'
+' 6 module: Flight · FlightSearch · FareClass · FareRule
+'           · FlightFare · FlightSeat(Inventory) · BaggageOption
+' Lớp cơ sở (Base*) xem file 00-kien-truc-chung.puml.
+' ===================================================================
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam nodesep 14
+skinparam ranksep 38
+skinparam classFontSize 11
+skinparam classBackgroundColor #FEFEFE
+skinparam classBorderColor #4A6785
+skinparam abstractClassBackgroundColor #E8EEF5
+skinparam noteBackgroundColor #FFFDE7
+skinparam noteBorderColor #C0A000
+skinparam arrowColor #4A6785
+
+title Sơ đồ lớp — 02. Phase 2 · Flight & Fare
+
+' ============================================================
+' 1. FLIGHT SEARCH (public) & FLIGHT MANAGEMENT (admin)
+' ============================================================
+package "1 · Flight (Search + Management)" #F2F7FB {
+
+  class FlightSearchController {
+    - flightService : FlightService
+    ..
+    + search(departureAirportId : Long, arrivalAirportId : Long, departureDate : LocalDate, passengers : int, tripType : TripType) : ApiResponse<List<FlightSearchResult>>
+    + getById(id : Long) : ApiResponse<FlightDetailResponse>
+  }
+
+  class FlightController {
+    - flightService : FlightService
+    ..
+    + list(ListQuery, Long airlineId, String status)
+    + getById(Long)
+    + create(FlightRequest) : ResponseEntity<ApiResponse<FlightResponse>>
+    + update(Long, FlightRequest) : ApiResponse<FlightResponse>
+    + activate(Long) : ApiResponse<FlightResponse>
+    + deactivate(Long) : ApiResponse<FlightResponse>
+    + delete(Long) : ApiResponse<Void>
+  }
+
+  class FlightService {
+    - flightRepository : FlightRepository
+    - aircraftRepository : AircraftRepository
+    - airlineRepository : AirlineRepository
+    - airportRepository : AirportRepository
+    - aircraftSeatRepository : AircraftSeatRepository
+    - flightFareRepository : FlightFareRepository
+    - flightSeatRepository : FlightSeatRepository
+    ..
+    + search(criteria : FlightSearchCriteria) : List<FlightSearchResult>
+    + list(ListQuery, Long, String) : PageData<FlightResponse>
+    + getById(Long) : FlightDetailResponse
+    + create(FlightRequest) : FlightResponse  «cần aircraft đủ sơ đồ ghế»
+    + update(Long, FlightRequest) : FlightResponse
+    + activate(Long) : FlightResponse
+    + deactivate(Long) : FlightResponse
+    + delete(Long) : void
+    - validateAircraftReady(Aircraft) : void
+    - validateNoBooking(Flight) : void
+  }
+}
+
+' ============================================================
+' 2. FARE CLASS
+' ============================================================
+package "2 · FareClass (loại vé)" #F5F2FB {
+
+  class FareClassController {
+    + list(ListQuery, String seatClass)
+  }
+  class FareClassService {
+    - fareClassRepository : FareClassRepository
+    ..
+    # createEntity(FareClassRequest) : FareClass
+    # updateEntity(FareClass, FareClassRequest) : void
+    # search(ListQuery, Map) : Page<FareClass>
+  }
+}
+
+' ============================================================
+' 3. FARE RULE (quy định hoàn vé — theo version)
+' ============================================================
+package "3 · FareRule (quy định hoàn vé)" #F5F2FB {
+
+  class FareRuleController {
+    + list(ListQuery, Long fareClassId)
+  }
+  class FareRuleService {
+    - fareRuleRepository : FareRuleRepository
+    - fareClassRepository : FareClassRepository
+    ..
+    # createEntity(FareRuleRequest) : FareRule  «version tự tăng»
+    # updateEntity(FareRule, FareRuleRequest) : void
+    + getActiveRule(Long fareClassId) : FareRule
+    # search(ListQuery, Map) : Page<FareRule>
+  }
+}
+
+' ============================================================
+' 4. FLIGHT FARE (giá bán theo chuyến)
+' ============================================================
+package "4 · FlightFare (giá theo chuyến)" #FBF5F2 {
+
+  class FlightFareController {
+    + list(ListQuery, Long flightId, Long fareClassId)
+  }
+  class FlightFareService {
+    - flightFareRepository : FlightFareRepository
+    - flightRepository : FlightRepository
+    - fareClassRepository : FareClassRepository
+    - pricingProperties : PricingProperties
+    ..
+    + create(FlightFareRequest) : FlightFareResponse
+    + update(Long, FlightFareRequest) : FlightFareResponse
+    + getPricedFares(Long flightId) : List<PricedFareResponse>
+    - validateNoOverlap(Long, Long, LocalDateTime, LocalDateTime) : void
+    - computePassengerPrices(FlightFare) : PricedFareResponse
+  }
+
+  class PricingProperties {
+    - childFarePercent : int
+    - infantFarePercent : int
+  }
+}
+
+' ============================================================
+' 5. FLIGHT SEAT INVENTORY (tồn ghế theo chuyến)
+' ============================================================
+package "5 · Seat Inventory (tồn ghế chuyến)" #F2FBF5 {
+
+  class SeatInventoryController {
+    - seatInventoryService : SeatInventoryService
+    ..
+    + getSeatMap(Long flightId) : ApiResponse<FlightSeatMapResponse>
+    + saveInventory(Long flightId, SeatInventoryRequest) : ApiResponse<FlightSeatMapResponse>
+    + block(Long flightSeatId) : ApiResponse<Void>
+    + unblock(Long flightSeatId) : ApiResponse<Void>
+  }
+
+  class SeatInventoryService {
+    - flightSeatRepository : FlightSeatRepository
+    - flightRepository : FlightRepository
+    - aircraftSeatRepository : AircraftSeatRepository
+    ..
+    + generateInventory(Long flightId) : int  «sinh từ aircraft_seats»
+    + getSeatMap(Long flightId) : FlightSeatMapResponse
+    + saveInventory(Long flightId, SeatInventoryRequest) : FlightSeatMapResponse
+    + block(Long flightSeatId) : void
+    + unblock(Long flightSeatId) : void
+    + hold(Long flightSeatId) : boolean  «UPDATE có điều kiện»
+    + release(Long flightSeatId) : void
+  }
+}
+
+' ============================================================
+' 6. BAGGAGE OPTION
+' ============================================================
+package "6 · BaggageOption (gói hành lý)" #FEF9F0 {
+
+  class BaggageOptionController {
+    + list(ListQuery)
+  }
+  class BaggageOptionService {
+    - baggageOptionRepository : BaggageOptionRepository
+    ..
+    # createEntity(BaggageOptionRequest) : BaggageOption
+    # updateEntity(BaggageOption, BaggageOptionRequest) : void
+    # search(ListQuery, Map) : Page<BaggageOption>
+  }
+}
+
+' ============================================================
+' ENTITY PHASE 2
+' ============================================================
+package "Entity (Phase 2)" #FEF9F0 {
+
+  class Flight {
+    - flightNumber : String
+    - airline : Airline
+    - aircraft : Aircraft
+    - departureAirport : Airport
+    - arrivalAirport : Airport
+    - scheduledDeparture : LocalDateTime
+    - scheduledArrival : LocalDateTime
+    - operationStatus : FlightOperationStatus
+    - salesStatus : SalesStatus
+    - parentFlight : Flight
+    - isDeleted : Boolean
+    - deletedAt : LocalDateTime
+  }
+
+  class FareClass {
+    - fareClassCode : String
+    - fareClassName : String
+    - seatClass : SeatClass
+  }
+
+  class FareRule {
+    - fareClass : FareClass
+    - version : Integer
+    - isRefundable : Boolean
+    - refundMinHoursBeforeDeparture : Integer
+    - refundPercent : BigDecimal
+    - description : String
+    - effectiveFrom : LocalDateTime
+  }
+
+  class FlightFare {
+    - flight : Flight
+    - fareClass : FareClass
+    - baseFare : BigDecimal
+    - taxFee : BigDecimal
+    - currency : String
+    - effectiveFrom : LocalDateTime
+    - effectiveTo : LocalDateTime
+  }
+
+  class FlightSeat {
+    - flight : Flight
+    - aircraftSeat : AircraftSeat
+    - seatCode : String
+    - status : FlightSeatStatus
+    - seatSurcharge : BigDecimal
+    - version : Long
+  }
+
+  class BaggageOption {
+    - name : String
+    - weightKg : BigDecimal
+    - price : BigDecimal
+  }
+}
+
+' ============================================================
+' QUAN HỆ
+' ============================================================
+FareClassController --|> BaseCrudController
+FareRuleController --|> BaseCrudController
+FlightFareController --|> BaseCrudController
+BaggageOptionController --|> BaseCrudController
+
+FareClassService --|> BaseCrudService
+FareRuleService --|> BaseCrudService
+BaggageOptionService --|> BaseCrudService
+
+FlightSearchController --> FlightService
+FlightController --> FlightService
+FlightFareController --> FlightFareService
+SeatInventoryController --> SeatInventoryService
+
+FlightService --> FlightFareRepository
+FlightFareService --> PricingProperties
+
+Airline "1" -- "0..*" Flight : khai thác
+Aircraft "1" -- "0..*" Flight : phục vụ
+Airport "1" -- "0..*" Flight : điểm đi
+Airport "1" -- "0..*" Flight : điểm đến
+Flight "0..1" -- "0..*" Flight : chuyến bổ sung
+Flight "1" -- "0..*" FlightFare : có giá
+FareClass "1" -- "0..*" FlightFare : được định giá
+FareClass "1" -- "0..*" FareRule : có quy định
+Flight "1" -- "0..*" FlightSeat : có tồn ghế
+AircraftSeat "1" -- "0..*" FlightSeat : sinh ra
+
+note bottom of FlightService
+  Flight mới tạo ở DRAFT + CLOSED.
+  Muốn OPEN phải có FlightFare hợp lệ
+  và Seat Inventory.
+  Chỉ chọn aircraft đã có sơ đồ ghế
+  đủ seat_capacity (mục 5.7 DB v0.5).
+end note
+
+note bottom of SeatInventoryService
+  Giữ ghế chống tranh chấp (mục 5.2 DB v0.5):
+  UPDATE flight_seats SET status='HOLD', version=version+1
+  WHERE id=:seatId AND status='AVAILABLE';
+  1 dòng bị ảnh hưởng = giữ thành công.
+end note
+
+note bottom of FlightFareService
+  Chỉ lưu giá NGƯỜI LỚN (base_fare + tax_fee).
+  Giá CHILD = 75%, INFANT = 10% — cấu hình ở
+  application.yml (app.pricing), không có bảng riêng.
+  Không cho 2 dòng chồng khoảng hiệu lực cùng
+  (flight_id, fare_class_id).
+end note
+
+note bottom of FareRule
+  is_refundable / refund_percent /
+  refund_min_hours_before_departure
+  CHỈ để HIỂN THỊ chính sách hoàn cho khách.
+  Hệ thống KHÔNG tự tính tiền hoàn (15/10/2026) —
+  khách liên hệ đại lý để hoàn tiền.
+end note
+
+@enduml

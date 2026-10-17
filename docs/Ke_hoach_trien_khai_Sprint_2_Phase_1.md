@@ -64,7 +64,7 @@ Ba open item này trong API Design v0.1 phải chốt ở ngày đầu, nếu kh
 **Chung:** chốt 4 quyết định ở mục 2; Bình thêm `V4__password_reset_tokens.sql` (nếu chọn cách thêm bảng).
 
 **Bình (BE):**
-- `config/SecurityConfig` (stateless, `/api/v1/auth/**` + GET công khai `permitAll`, còn lại authenticated; method-level `@PreAuthorize("hasAuthority('XXX')")`). Prefix `ROLE_`/permission vào claim JWT.
+- `config/SecurityConfig` (stateless, `/api/auth/**` + GET công khai `permitAll`, còn lại authenticated; method-level `@PreAuthorize("hasAuthority('XXX')")`). Prefix `ROLE_`/permission vào claim JWT.
 - `security/JwtService` (tạo/validate token, claim `sub`, `email`, `permissions`), `UserDetailsServiceImpl`, `PasswordEncoder` (BCrypt).
 - `common/ApiResponse<T>`, `common/GlobalExceptionHandler` (map 9 mã lỗi ở API Design mục 1.4), `common/ListQuery` + `PageData`.
 - Exception: `BusinessException`, `ResourceNotFoundException`, `DuplicateResourceException`.

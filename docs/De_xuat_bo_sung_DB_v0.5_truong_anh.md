@@ -105,12 +105,12 @@ Thêm các trường vào response (không phá vỡ hợp đồng — client c�
 
 | Endpoint | Trường thêm vào |
 |---|---|
-| `GET /api/v1/news`, `GET /api/v1/news/{id}` | `thumbnail_url` (string \| null) |
-| `POST`/`PUT /api/v1/news` | nhận `thumbnail_url` trong payload |
-| `GET /api/v1/cities`, `GET /api/v1/cities/{id}` | `image_url` (string \| null) |
-| `POST`/`PUT /api/v1/cities` | nhận `image_url` trong payload |
-| `GET /api/v1/promotions`, `GET /api/v1/promotions/{id}` | `image_url`, `description`, `badge_label` (string \| null) |
-| `POST`/`PUT /api/v1/promotions` | nhận 3 trường trên trong payload |
+| `GET /api/news`, `GET /api/news/{id}` | `thumbnail_url` (string \| null) |
+| `POST`/`PUT /api/news` | nhận `thumbnail_url` trong payload |
+| `GET /api/cities`, `GET /api/cities/{id}` | `image_url` (string \| null) |
+| `POST`/`PUT /api/cities` | nhận `image_url` trong payload |
+| `GET /api/promotions`, `GET /api/promotions/{id}` | `image_url`, `description`, `badge_label` (string \| null) |
+| `POST`/`PUT /api/promotions` | nhận 3 trường trên trong payload |
 
 Đúng quy ước mục 1.2 API v0.2: JSON `snake_case`, trường `null` **luôn có mặt**
 trong response.

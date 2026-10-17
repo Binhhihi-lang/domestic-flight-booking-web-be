@@ -1,0 +1,577 @@
+@startuml 01-Phase1
+' ===================================================================
+' SƠ ĐỒ LỚP — 01. PHASE 1: FOUNDATION & MASTER DATA
+' Website Đặt Vé Máy Bay Nội Địa — DB v0.5 / API v0.4
+'
+' 14 module: Auth · Profile · User · RBAC · Airline · City · Airport
+'            · Aircraft · SeatType · SeatMap · Promotion · Voucher
+'            · News · NewsCategory
+' Lớp cơ sở (Base*) xem file 00-kien-truc-chung.puml.
+' ===================================================================
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam nodesep 14
+skinparam ranksep 38
+skinparam classFontSize 11
+skinparam classBackgroundColor #FEFEFE
+skinparam classBorderColor #4A6785
+skinparam abstractClassBackgroundColor #E8EEF5
+skinparam noteBackgroundColor #FFFDE7
+skinparam noteBorderColor #C0A000
+skinparam arrowColor #4A6785
+
+title Sơ đồ lớp — 01. Phase 1 · Foundation & Master Data
+
+' ============================================================
+' 1. AUTHENTICATION & PROFILE
+' ============================================================
+package "1 · Authentication & Profile" #F2F7FB {
+
+  class AuthController {
+    - authService : AuthService
+    ..
+    + register(RegisterRequest) : ResponseEntity<ApiResponse<UserResponse>>
+    + login(LoginRequest) : ApiResponse<LoginResponse>
+    + logout(String) : ApiResponse<Void>
+    + refresh(RefreshTokenBody) : ApiResponse<LoginResponse>
+    + requestPasswordReset(PasswordResetRequest) : ApiResponse<PasswordResetResponse>
+    + confirmPasswordReset(PasswordResetConfirmRequest) : ApiResponse<Void>
+    + changePassword(ChangePasswordRequest) : ApiResponse<Void>
+  }
+
+  class ProfileController {
+    - profileService : ProfileService
+    ..
+    + getProfile() : ApiResponse<UserResponse>
+    + updateProfile(UpdateProfileRequest) : ApiResponse<UserResponse>
+    + uploadAvatar(MultipartFile) : ApiResponse<Map<String,String>>
+  }
+
+  class AuthService {
+    - userRepository : UserRepository
+    - roleRepository : RoleRepository
+    - refreshTokenRepository : RefreshTokenRepository
+    - invalidatedTokenRepository : InvalidatedTokenRepository
+    - passwordResetTokenRepository : PasswordResetTokenRepository
+    - passwordEncoder : PasswordEncoder
+    - jwtService : JwtService
+    ..
+    + register(RegisterRequest) : UserResponse
+    + login(LoginRequest) : LoginResponse
+    + logout(String) : void
+    + refresh(String) : LoginResponse
+    + requestPasswordReset(String) : PasswordResetResponse
+    + confirmPasswordReset(String, String) : void
+    + changePassword(Long, ChangePasswordRequest) : void
+  }
+
+  class ProfileService {
+    - userRepository : UserRepository
+    - cloudinaryService : CloudinaryService
+    ..
+    + getProfile(Long) : UserResponse
+    + updateProfile(Long, UpdateProfileRequest) : UserResponse
+    + uploadAvatar(Long, MultipartFile) : String
+  }
+
+  class JwtService {
+    - signerKey : String
+    - accessDuration : long
+    - refreshableDuration : long
+    ..
+    + generateAccessToken(User) : String
+    + generateRefreshToken(User) : String
+    + extractJwtId(String) : String
+    + extractSubject(String) : String
+    + isValid(String) : boolean
+  }
+
+  class CloudinaryService {
+    + upload(MultipartFile) : String
+    + delete(String) : void
+  }
+}
+
+' ============================================================
+' 2. USER MANAGEMENT
+' ============================================================
+package "2 · User Management (ADMIN)" #F2F7FB {
+
+  class UserController {
+    - userService : UserService
+    ..
+    + list(ListQuery, String status, String role) : ApiResponse<PageData<UserResponse>>
+    + getById(Long) : ApiResponse<UserResponse>
+    + create(CreateUserRequest) : ResponseEntity<ApiResponse<UserResponse>>
+    + update(Long, UpdateUserRequest) : ApiResponse<UserResponse>
+    + delete(Long) : ApiResponse<Void>
+    + resetPassword(Long) : ApiResponse<ResetPasswordResponse>
+  }
+
+  class UserService {
+    - userRepository : UserRepository
+    - roleRepository : RoleRepository
+    - passwordEncoder : PasswordEncoder
+    - userMapper : UserMapper
+    - userDetailsService : UserDetailsServiceImpl
+    - refreshTokenRepository : RefreshTokenRepository
+    ..
+    + list(ListQuery, String, String) : PageData<UserResponse>
+    + getById(Long) : UserResponse
+    + create(CreateUserRequest) : UserResponse
+    + update(Long, UpdateUserRequest, Long) : UserResponse
+    + delete(Long, Long) : void
+    + resetPassword(Long) : String
+    - resolveRole(List<String>) : Role
+    - countActiveAdmins() : long
+    - generateTemporaryPassword() : String
+  }
+
+  class UserMapper {
+    + toResponse(User) : UserResponse
+  }
+}
+
+' ============================================================
+' 3. RBAC (read-only)
+' ============================================================
+package "3 · RBAC — Role & Permission (read-only)" #F2F7FB {
+
+  class RbacController {
+    - rbacService : RbacService
+    ..
+    + listRoles() : ApiResponse<List<RoleResponse>>
+    + listPermissions(ListQuery, String module) : ApiResponse<List<PermissionResponse>>
+  }
+
+  class RbacService {
+    - roleRepository : RoleRepository
+    - permissionRepository : PermissionRepository
+    ..
+    + listRoles() : List<RoleResponse>
+    + listPermissions(ListQuery, String) : List<PermissionResponse>
+  }
+}
+
+' ============================================================
+' 4. MASTER DATA — Airline / City / Airport / Aircraft
+' ============================================================
+package "4 · Master Data (khuôn chung 5 endpoint)" #F5F2FB {
+
+  abstract class BaseCrudController<T, ID, Req, Resp> {
+    + getById · create · update · toggleActive · delete
+  }
+  abstract class BaseCrudService<T, ID, Req, Resp> {
+    + list · getById · create · update · toggleActive · delete
+  }
+
+  class AirlineController {
+    + list(ListQuery, String status, String country)
+  }
+  class AirlineService {
+    - airlineRepository : AirlineRepository
+    - airlineMapper : AirlineMapper
+    ..
+    # createEntity(AirlineRequest) : Airline
+    # updateEntity(Airline, AirlineRequest) : void
+    # softDelete(Airline) : void
+    # search(ListQuery, Map) : Page<Airline>
+  }
+  class AirlineMapper {
+    + toResponse(Airline) : AirlineResponse
+  }
+
+  class CityController {
+    + list(ListQuery, String country)
+  }
+  class CityService {
+    - cityRepository : CityRepository
+    - cityMapper : CityMapper
+    ..
+    # createEntity(CityRequest) : City
+    # updateEntity(City, CityRequest) : void
+    # search(ListQuery, Map) : Page<City>
+  }
+  class CityMapper {
+    + toResponse(City) : CityResponse
+  }
+
+  class AirportController {
+    + list(ListQuery, Long cityId)
+  }
+  class AirportService {
+    - airportRepository : AirportRepository
+    - cityRepository : CityRepository
+    - airportMapper : AirportMapper
+    ..
+    # createEntity(AirportRequest) : Airport
+    # updateEntity(Airport, AirportRequest) : void
+    # search(ListQuery, Map) : Page<Airport>
+  }
+  class AirportMapper {
+    + toResponse(Airport) : AirportResponse
+  }
+
+  class AircraftController {
+    + list(ListQuery)
+  }
+  class AircraftService {
+    - aircraftRepository : AircraftRepository
+    - aircraftMapper : AircraftMapper
+    ..
+    # createEntity(AircraftRequest) : Aircraft
+    # updateEntity(Aircraft, AircraftRequest) : void
+    # search(ListQuery, Map) : Page<Aircraft>
+  }
+  class AircraftMapper {
+    + toResponse(Aircraft) : AircraftResponse
+  }
+}
+
+' ============================================================
+' 5. SEAT — SeatType & SeatMap
+' ============================================================
+package "5 · Seat Configuration" #F5F2FB {
+
+  class SeatTypeController {
+    + list(ListQuery)
+  }
+  class SeatTypeService {
+    - seatTypeRepository : SeatTypeRepository
+    - aircraftSeatRepository : AircraftSeatRepository
+    - seatTypeMapper : SeatTypeMapper
+    ..
+    # createEntity(SeatTypeRequest) : SeatType
+    # updateEntity(SeatType, SeatTypeRequest) : void
+    + delete(Long) : void  «chặn nếu đang dùng»
+    # search(ListQuery, Map) : Page<SeatType>
+  }
+  class SeatTypeMapper {
+    + toResponse(SeatType) : SeatTypeResponse
+  }
+
+  class SeatMapController {
+    - seatMapService : SeatMapService
+    ..
+    + getSeatMap(Long aircraftId) : ApiResponse<SeatMapResponse>
+    + saveSeatMap(Long aircraftId, SeatMapRequest) : ApiResponse<SeatMapResponse>
+  }
+  class SeatMapService {
+    - aircraftRepository : AircraftRepository
+    - aircraftSeatRepository : AircraftSeatRepository
+    - seatTypeRepository : SeatTypeRepository
+    - flightSeatRepository : FlightSeatRepository
+    ..
+    + getSeatMap(Long) : SeatMapResponse
+    + saveSeatMap(Long, SeatMapRequest) : SeatMapResponse
+    - validate(SeatMapRequest) : void
+  }
+}
+
+' ============================================================
+' 6. PROMOTION
+' ============================================================
+package "6 · Promotion" #FBF5F2 {
+
+  class PromotionController {
+    + list(ListQuery, String isActive, String discountType, String tripType)
+  }
+  class PromotionService {
+    - promotionRepository : PromotionRepository
+    - promotionScopeRepository : PromotionScopeRepository
+    - promotionExcludedFlightRepository : PromotionExcludedFlightRepository
+    - airlineRepository : AirlineRepository
+    - fareClassRepository : FareClassRepository
+    - flightRepository : FlightRepository
+    - airportRepository : AirportRepository
+    ..
+    + create(PromotionRequest) : PromotionResponse
+    + update(Long, PromotionRequest) : PromotionResponse
+    - replaceScopes(Promotion, List<ScopeItem>) : void
+    - replaceExcludedFlights(Promotion, List<Long>) : void
+    # search(ListQuery, Map) : Page<Promotion>
+  }
+}
+
+' ============================================================
+' 7. VOUCHER
+' ============================================================
+package "7 · Voucher" #FBF5F2 {
+
+  class VoucherController {
+    + list(ListQuery, ...)
+    + assign(Long, AssignRequest) : ApiResponse<Map<String,Integer>>
+  }
+  class VoucherCustomerController {
+    - voucherService : VoucherService
+    ..
+    + voucherStore() : ApiResponse<List<VoucherStoreItem>>
+    + claim(Long) : ApiResponse<Map<String,Object>>
+    + myVouchers(ListQuery) : ApiResponse<PageData<MyVoucherResponse>>
+    + myVoucher(Long) : ApiResponse<MyVoucherResponse>
+  }
+  class VoucherService {
+    - voucherRepository : VoucherRepository
+    - voucherScopeRepository : VoucherScopeRepository
+    - voucherExcludedFlightRepository : VoucherExcludedFlightRepository
+    - userVoucherRepository : UserVoucherRepository
+    ..
+    + create(VoucherRequest) : VoucherResponse
+    + update(Long, VoucherRequest) : VoucherResponse
+    + claim(Long voucherId, Long userId) : UserVoucher
+    + assign(Long voucherId, List<Long> userIds) : int
+    + getVoucherStore(Long userId) : List<VoucherStoreItem>
+    + getMyVouchers(Long, Pageable) : Page<MyVoucherResponse>
+    + getMyVoucher(Long, Long) : MyVoucherResponse
+  }
+}
+
+' ============================================================
+' 8. NEWS & NEWS CATEGORY
+' ============================================================
+package "8 · News & News Category" #F2FBF5 {
+
+  class NewsController {
+    + list(ListQuery, String status, String categoryId)
+    + publish(Long) : ApiResponse<NewsResponse>
+    + unpublish(Long) : ApiResponse<NewsResponse>
+  }
+  class NewsService {
+    - newsRepository : NewsItemRepository
+    - categoryRepository : NewsCategoryRepository
+    - mappingRepository : NewsCategoryMappingRepository
+    ..
+    + create(NewsRequest) : NewsResponse
+    + update(Long, NewsRequest) : NewsResponse
+    + publish(Long) : NewsResponse  «cần ≥1 chuyên mục»
+    + unpublish(Long) : NewsResponse
+    - replaceCategories(NewsItem, List<Long>) : void
+    # search(ListQuery, Map) : Page<NewsItem>
+  }
+
+  class NewsCategoryController {
+    + list(ListQuery)
+  }
+  class NewsCategoryService {
+    - newsCategoryRepository : NewsCategoryRepository
+    - mappingRepository : NewsCategoryMappingRepository
+    ..
+    + delete(Long) : void  «chặn nếu còn News»
+    # search(ListQuery, Map) : Page<NewsCategory>
+  }
+}
+
+' ============================================================
+' ENTITY PHASE 1
+' ============================================================
+package "Entity (Phase 1)" #FEF9F0 {
+
+  class User {
+    - email : String
+    - passwordHash : String
+    - fullName : String
+    - phone : String
+    - avatarUrl : String
+    - role : Role
+  }
+  class Role {
+    - name : String
+    - description : String
+  }
+  class Permission {
+    - permissionKey : String
+    - description : String
+    - module : String
+  }
+  class Airline {
+    - airlineCode : String
+    - airlineName : String
+    - country : String
+    - logoUrl : String
+  }
+  class City {
+    - cityCode : String
+    - cityName : String
+    - country : String
+    - imageUrl : String
+  }
+  class Airport {
+    - airportCode : String
+    - airportName : String
+    - latitude : BigDecimal
+    - longitude : BigDecimal
+    - city : City
+  }
+  class Aircraft {
+    - aircraftCode : String
+    - model : String
+    - manufacturer : String
+    - seatCapacity : Integer
+  }
+  class SeatType {
+    - seatTypeCode : String
+    - seatTypeName : String
+    - seatClass : SeatClass
+    - colorHex : String
+  }
+  class AircraftSeat {
+    - seatRow : Integer
+    - seatColumn : String
+    - aircraft : Aircraft
+    - seatType : SeatType
+  }
+  class Promotion {
+    - promotionCode : String
+    - promotionName : String
+    - discountType : DiscountType
+    - discountValue : BigDecimal
+    - maxDiscountAmount : BigDecimal
+    - minFareAmount : BigDecimal
+    - applicableTripType : TripTypeCondition
+    - imageUrl : String
+    - description : String
+    - badgeLabel : String
+    - startDate : LocalDate
+    - endDate : LocalDate
+  }
+  class PromotionScope {
+    - targetType : ScopeTargetType
+    - promotion : Promotion
+    - airline : Airline
+    - fareClass : FareClass
+    - flight : Flight
+    - departureAirport : Airport
+    - arrivalAirport : Airport
+  }
+  class PromotionExcludedFlight {
+    - promotion : Promotion
+    - flight : Flight
+  }
+  class Voucher {
+    - voucherCode : String
+    - voucherName : String
+    - description : String
+    - distributionType : VoucherDistributionType
+    - discountType : DiscountType
+    - discountValue : BigDecimal
+    - maxDiscountAmount : BigDecimal
+    - minOrderAmount : BigDecimal
+    - applicableTripType : TripTypeCondition
+    - startDate : LocalDate
+    - endDate : LocalDate
+    - claimLimit : Integer
+    - claimedCount : Integer
+  }
+  class VoucherScope {
+    - targetType : ScopeTargetType
+    - voucher : Voucher
+  }
+  class VoucherExcludedFlight {
+    - voucher : Voucher
+    - flight : Flight
+  }
+  class UserVoucher {
+    - status : UserVoucherStatus
+    - source : UserVoucherSource
+    - receivedAt : LocalDateTime
+    - expiresAt : LocalDateTime
+    - discountAmount : BigDecimal
+    - usedAt : LocalDateTime
+    - user : User
+    - voucher : Voucher
+    - booking : Booking
+  }
+  class NewsCategory {
+    - name : String
+    - description : String
+  }
+  class NewsItem {
+    - title : String
+    - content : String
+    - thumbnailUrl : String
+    - status : NewsStatus
+    - publishedAt : LocalDateTime
+    - isDeleted : Boolean
+    - deletedAt : LocalDateTime
+  }
+  class NewsCategoryMapping {
+    - news : NewsItem
+    - category : NewsCategory
+  }
+}
+
+' ============================================================
+' QUAN HỆ
+' ============================================================
+AirlineController --|> BaseCrudController
+CityController --|> BaseCrudController
+AirportController --|> BaseCrudController
+AircraftController --|> BaseCrudController
+SeatTypeController --|> BaseCrudController
+PromotionController --|> BaseCrudController
+VoucherController --|> BaseCrudController
+NewsController --|> BaseCrudController
+NewsCategoryController --|> BaseCrudController
+
+AirlineService --|> BaseCrudService
+CityService --|> BaseCrudService
+AirportService --|> BaseCrudService
+AircraftService --|> BaseCrudService
+SeatTypeService --|> BaseCrudService
+PromotionService --|> BaseCrudService
+VoucherService --|> BaseCrudService
+NewsService --|> BaseCrudService
+NewsCategoryService --|> BaseCrudService
+
+AuthController --> AuthService
+ProfileController --> ProfileService
+UserController --> UserService
+RbacController --> RbacService
+SeatMapController --> SeatMapService
+VoucherCustomerController --> VoucherService
+
+AirlineController --> AirlineService
+CityController --> CityService
+AirportController --> AirportService
+AircraftController --> AircraftService
+SeatTypeController --> SeatTypeService
+PromotionController --> PromotionService
+VoucherController --> VoucherService
+NewsController --> NewsService
+NewsCategoryController --> NewsCategoryService
+
+AirlineService --> AirlineMapper
+CityService --> CityMapper
+AirportService --> AirportMapper
+AircraftService --> AircraftMapper
+SeatTypeService --> SeatTypeMapper
+
+Role "1" -- "0..*" User : được gán cho
+Role "0..*" -- "0..*" Permission : được cấp (role_permissions)
+City "1" -- "0..*" Airport : chứa
+Airport "1" -- "0..*" AircraftSeat : —
+Aircraft "1" -- "0..*" AircraftSeat : có sơ đồ ghế
+SeatType "1" -- "0..*" AircraftSeat : phân loại
+Promotion "1" -- "0..*" PromotionScope : có
+Promotion "0..*" -- "0..*" Flight : loại trừ (promotion_excluded_flights)
+Voucher "1" -- "0..*" VoucherScope : có
+Voucher "0..*" -- "0..*" Flight : loại trừ (voucher_excluded_flights)
+User "0..*" -- "0..*" Voucher : nhận/tặng (user_vouchers)
+NewsItem "0..*" -- "0..*" NewsCategory : thuộc (news_category_mapping)
+
+note bottom of UserService
+  Ràng buộc xóa (14/10/2026):
+  ADMIN KHÔNG xóa được tài khoản role ADMIN
+  (kể cả chính mình) — chỉ xóa STAFF/CUSTOMER.
+end note
+
+note bottom of SeatMapService
+  Lưu cả sơ đồ trong 1 transaction.
+  Ràng buộc: không trùng (row, column);
+  seat_type tồn tại + is_active;
+  tổng ghế = seat_capacity;
+  máy bay chưa có flight_seats.
+end note
+
+@enduml

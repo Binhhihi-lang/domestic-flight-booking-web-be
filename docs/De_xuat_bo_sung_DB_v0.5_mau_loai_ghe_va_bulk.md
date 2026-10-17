@@ -51,8 +51,8 @@ Thêm `color_hex` vào `seat_types` (mục 2.6):
 
 | Endpoint | Thay đổi |
 |---|---|
-| `GET /api/v1/seat-types`, `GET /api/v1/seat-types/{id}` | trả thêm `color_hex` (string \| null) |
-| `POST`/`PUT /api/v1/seat-types` | nhận `color_hex` trong payload |
+| `GET /api/seat-types`, `GET /api/seat-types/{id}` | trả thêm `color_hex` (string \| null) |
+| `POST`/`PUT /api/seat-types` | nhận `color_hex` trong payload |
 
 ```json
 {
@@ -88,14 +88,14 @@ Ba hành động cần hỗ trợ: **xóa mềm**, **ngừng kích hoạt** (`is
 
 | Method | Path | Quyền | Việc |
 |---|---|---|---|
-| `PATCH` | `/api/v1/{resource}/bulk` | như `*_UPDATE` / `*_DELETE` của module | đổi `is_active` hàng loạt |
-| `DELETE` | `/api/v1/{resource}/bulk` | như `*_DELETE` của module | xóa mềm hàng loạt |
+| `PATCH` | `/api/{resource}/bulk` | như `*_UPDATE` / `*_DELETE` của module | đổi `is_active` hàng loạt |
+| `DELETE` | `/api/{resource}/bulk` | như `*_DELETE` của module | xóa mềm hàng loạt |
 
 Ví dụ với airlines:
 
 ```
-PATCH  /api/v1/airlines/bulk   { "ids": [1, 2, 3], "is_active": false }
-DELETE /api/v1/airlines/bulk   { "ids": [1, 2, 3] }
+PATCH  /api/airlines/bulk   { "ids": [1, 2, 3], "is_active": false }
+DELETE /api/airlines/bulk   { "ids": [1, 2, 3] }
 ```
 
 **Vì sao `PATCH` cho việc bật/tắt thay vì `PUT`:** chỉ đổi MỘT trường (`is_active`) trên nhiều bản ghi, không thay thế toàn bộ tài nguyên — đúng ngữ nghĩa PATCH.
@@ -158,7 +158,7 @@ Nếu Bình thấy all-or-nothing dễ làm hơn (một transaction, rollback c�
 
 Trang **Tin tức cho khách** cần dropdown lọc theo danh mục. Nhưng API v0.2 mục 2.9 ghi:
 
-> `GET /api/v1/news-categories` | A — `NEWS_CATEGORY_READ`
+> `GET /api/news-categories` | A — `NEWS_CATEGORY_READ`
 > *"`GET` danh sách theo UC NEWS-CAT-01 là **ADMIN** (khác News — category không public)"*
 
 Khách gọi endpoint này sẽ bị `1003` (ACCESS_DENIED).
@@ -170,7 +170,7 @@ Suy danh mục từ chính dữ liệu `GET /news` trả về (mỗi item có `c
 ### 3.3 Đề xuất — chọn một
 
 - **(a)** Đổi `GET /news-categories` thành **public** (`P — NEWS_CATEGORY_READ`). Đơn giản nhất. Nhưng lưu ý: endpoint này trả cả danh mục `INACTIVE` và có `description` — cân nhắc có nên lọc `is_active = true` cho khách không.
-- **(b)** Thêm endpoint public riêng: `GET /api/v1/news-categories/public` — chỉ trả danh mục đang hoạt động, chỉ `id` + `category_name`. Sạch hơn về mặt phân quyền: endpoint ADMIN giữ nguyên hình dạng, khách có endpoint riêng tối giản.
+- **(b)** Thêm endpoint public riêng: `GET /api/news-categories/public` — chỉ trả danh mục đang hoạt động, chỉ `id` + `category_name`. Sạch hơn về mặt phân quyền: endpoint ADMIN giữ nguyên hình dạng, khách có endpoint riêng tối giản.
 - **(c)** Giữ nguyên, FE tiếp tục suy từ `GET /news`.
 
 **Tôi nghiêng về (b)**: phân quyền rõ ràng, và endpoint public không lộ `description`/`is_active` vốn chỉ có nghĩa với ADMIN. Nhưng (a) cũng chấp nhận được nếu Bình muốn ít endpoint.

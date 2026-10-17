@@ -1,8 +1,8 @@
 # Tổng kết công nghệ — Website Đặt Vé Máy Bay Nội Địa
 
-**Ngày:** 19/09/2026
+**Ngày:** 19/09/2026 · **Cập nhật:** 13/10/2026 (sau khi xong Phase 1 backend)
 **Phạm vi:** cả 2 repo `domestic-flight-booking-web-backend` + `domestic-flight-booking-web-frontend`
-**Căn cứ:** Database Design v0 · Permission Matrix v2.0 · API Design v0.1
+**Căn cứ:** Database Design v0.4 · Permission Matrix v2.0 · API Design v0.2
 
 ---
 
@@ -13,13 +13,14 @@
 | Backend | Java 17 + Spring Boot 4.1.1 | module starters (Boot 4 tách autoconfigure) |
 | Frontend | Angular 22 (SFC + Signals) | standalone-first, lazy loading |
 | Database | PostgreSQL 18.6 trên **Aiven** (cloud) | timestamptz, snake_case |
-| Migration | Flyway 12.4.0 | 3 version đã migrate thành công |
+| Migration | Flyway 12.4.0 | **V1–V11** (schema v0.4 + bổ sung v0.5) |
 | Auth | JWT Bearer (Spring Security 6 Resource Server) | permission trong claim, ký **HS256** |
-| Token store | **Redis 7.2** (Docker, `docker-compose.dev.yml`) | blacklist access token + whitelist refresh token + cache permission |
+| Token store | **Redis 7.2** (Docker, `docker-compose.dev.yml`) | blacklist access token + whitelist refresh token + cache permission + reset-password token |
 | UI kit | Angular Material 22 (theme M3 `azure-blue`) | component |
 | Styling | Tailwind CSS 3.4 | layout/utility, config từ laptopshop |
 | Media | Cloudinary (cloudinary-http5 2.0.0) | avatar ảnh |
-| Test BE | (chưa có mock DB — chạy thẳng Aiven) | `mvn compile` + run profile dev |
+| HTML sanitize | **jsoup 1.18.3** | chống XSS cho nội dung News |
+| Test BE | JUnit 5 + Mockito + AssertJ | **45 test pass**, không cần DB (mock repository) |
 | Test FE | Vitest 4.1.11 | 4 test pass |
 
 ---
@@ -62,19 +63,34 @@
 
 ```
 src/main/java/com/example/domesticflightbookingwebbackend/
-├── entity/        # 27 entity + 14 enum (đúng 30 bảng v0)
-├── repository/    # 27 interface JpaRepository<T, Long>
-└── (sắp tới) dto/ controller/ service/ mapper/ config/ security/
+├── common/        # ApiResponse, PageData, ListQuery, PageMapper, HtmlSanitizer
+├── config/        # Security, CustomJwtDecoder/Converter, CORS, OpenApi,
+│                  # Cloudinary, DataInitializer, entry point/handler lỗi 401/403
+├── controller/    # chia theo module + BaseCrudController
+├── dto/request/   # auth, profile, user, masterdata, promotion, voucher, news
+├── dto/response/  # auth, user, rbac, masterdata, promotion, voucher, news
+├── entity/        # entity + enum (+ entity/redis/: InvalidatedToken, RefreshToken,
+│                  # CachedAuthorities, PasswordResetToken)
+├── exception/     # ErrorCode, AppException (+3 lớp con), GlobalExceptionHandler
+├── mapper/        # User, Airline, City, Airport, Aircraft, SeatType
+├── repository/    # JpaRepository (+ repository/redis/: CrudRepository)
+├── security/      # JwtService (HS256), UserDetailsServiceImpl, SecurityUtils
+└── service/       # BaseCrudService + service từng module
 src/main/resources/
-├── db/migration/  # V1__init_schema.sql, V2__seed_rbac.sql, V3__seed_master_data.sql
-├── application.properties        # spring.profiles.active=dev
-└── application-dev.properties    # datasource (Aiven) + cloudinary + JPA validate
+├── db/migration/  # V1–V3 (schema v0 + seed) · V4–V9 (nâng lên v0.4)
+│                  # V10 (ảnh + permissions.module + 2 quyền) · V11 (reset sequence)
+├── application.properties        # spring.profiles.active=dev + Jackson snake_case
+├── application-dev.properties    # Aiven + Redis + JWT + Cloudinary + CORS
+└── application-local.properties  # Docker local (Postgres 5433 + Redis 6379)
 ```
 
 ### 2.5 Quy ước code
 
-- Entity: `@Getter @Setter`, `@Id @GeneratedValue(IDENTITY)`, enum → `@Enumerated(STRING)` + `@Column(length)`, FK → `@ManyToOne(fetch=LAZY) @JoinColumn`, TEXT → `@Column(columnDefinition="TEXT")`, `NUMERIC(p,s)` → `@Column(precision, scale)` BigDecimal. **Không** `@OneToMany`, **không** soft-delete tự bịa (khớp v0).
+- Entity: `@Getter @Setter`, `@Id @GeneratedValue(IDENTITY)`, enum → `@Enumerated(STRING)` + `@Column(length)`, FK → `@ManyToOne(fetch=LAZY) @JoinColumn`, TEXT → `@Column(columnDefinition="TEXT")`, `NUMERIC(p,s)` → `@Column(precision, scale)` BigDecimal. **Không** `@OneToMany`.
 - Schema do Flyway quản lý, Hibernate chỉ `ddl-auto=validate`.
+- **JSON snake_case toàn cục** (`spring.jackson.property-naming-strategy=SNAKE_CASE`): DTO viết camelCase, JSON ra ngoài snake_case. Sort whitelist khai theo tên API (`created_at`), `PageMapper` tự đổi sang property entity (`createdAt`).
+- Mọi response bọc `ApiResponse<T>` (`{code, message, data}`); danh sách trả `PageData<T>` (`{items, pagination}`). Lỗi map qua `GlobalExceptionHandler` theo 9 mã 1000–1008 + 9999.
+- Service dùng `@Slf4j`, log các mốc nghiệp vụ (tạo/cập nhật/xóa/toggle, claim, publish…).
 
 ---
 
@@ -115,7 +131,7 @@ src/app/
 ├── app.config.ts                  # provideHttpClient(+interceptor), provideRouter
 └── app.ts                         # root component
 src/
-├── environments/environment.ts    # apiBaseUrl = http://localhost:8080/api/v1
+├── environments/environment.ts    # apiBaseUrl = http://localhost:8080/api
 ├── material-theme.scss            # theme M3 azure-blue
 └── styles.css                     # @tailwind + global reset
 ```

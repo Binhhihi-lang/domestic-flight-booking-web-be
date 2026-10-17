@@ -2,7 +2,10 @@ HELP.md
 target/
 
 ### Env ###
+# Chặn MỌI biến thể của file env chứa bí mật — không chỉ đúng tên ".env".
+# .env.bak, .env.local, .env.old, .env.2026-10-17... đều lọt nếu chỉ ghi ".env".
 .env
+.env.*
 !.env.example
 
 ### Office temp (Word/Excel lock files) ###

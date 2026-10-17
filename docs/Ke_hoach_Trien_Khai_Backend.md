@@ -210,7 +210,7 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 - `security/JwtService` — tạo/parse token, claim `sub` (userId), `email`, `jti`, `permissions`.
 - `config/CustomJwtDecoder` — **check blacklist trước** khi verify chữ ký.
 - `config/CustomJwtAuthenticationConverter` — đọc `CachedAuthorities`, miss thì query DB rồi cache.
-- `config/SecurityConfig` — stateless; `permitAll` cho `/api/v1/auth/**` + public GET; còn lại authenticated; `@EnableMethodSecurity` cho `@PreAuthorize("hasAuthority('XXX')")`.
+- `config/SecurityConfig` — stateless; `permitAll` cho `/api/auth/**` + public GET; còn lại authenticated; `@EnableMethodSecurity` cho `@PreAuthorize("hasAuthority('XXX')")`.
 - `config/JwtAuthenticationEntryPoint` (→ `1002`), `config/CustomAccessDeniedHandler` (→ `1003`).
 - `security/UserDetailsServiceImpl`, `PasswordEncoder` (BCrypt).
 - `config/RedisConfig` (nếu cần serializer tùy chỉnh).
@@ -308,8 +308,13 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 | 5 | Profile + User Management + RBAC | 4 | ✅ 13/10/2026 |
 | 6 | Master Data (Airline mẫu → 5 module) | 2 | ✅ 13/10/2026 |
 | 7 | Promotion + Voucher + News | 6 | ✅ 13/10/2026 |
-| 8 | Test, hardening, tài liệu | 4–7 | ⬜ |
+| 8 | Test, hardening, tài liệu | 4–7 | ✅ 13/10/2026 |
 | + | **V10** — ảnh News/City/Promotion + `permissions.module` + 2 quyền mới | 1 | ✅ 12/10/2026 |
+| **10** | **`color_hex` loại ghế (V12)** | 8 | ⬜ **1 · làm trước** |
+| **9** | **Vá 4 lỗ hổng bảo mật + bỏ ví (V13)** | 8, 10 | ⬜ **2 · ưu tiên cao** |
+| **11** | **Tách `/admin` `/public` + bỏ `/v1` + bulk** | 9, 10 | ⬜ **3 · rủi ro cao** |
+
+**Chi tiết 3 cụm mới ở mục 5b.** Thứ tự cố định **10 → 9 → 11**: Flyway chạy theo số tăng dần nên V12 phải có trước V13.
 
 **Cụm 6 chỉ phụ thuộc cụm 2** (không cần chờ Security) → có thể chạy song song với cụm 3–5 nếu cần tăng tốc.
 
@@ -387,9 +392,76 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 - **Đã verify E2E thật (curl):** Promotion 5/5 (tạo 1000, public GET có scopes, percent>100 1006, scope thiếu airline_id 1001); Voucher 11/11 (claim 1000, claim lại 1005, **hết lượt 1006**, store ẩn khi hết lượt, assign ASSIGNED 1000, assign GLOBAL 1006, my-vouchers có voucher tặng); News 8/8 (**XSS `<script>` bị strip**, DRAFT không lộ ra public, publish 1000, public thấy bài, unpublish về DRAFT + ẩn khỏi public, xóa category còn bài 1006). `mvn test` → **26/26 pass**.
 - **Lưu ý:** lỗi "publish 1006" khi test lần đầu là do **script test parse id sai** (sed tham lam), không phải bug code — đã xác nhận lại bằng parse JSON đúng.
 
+**Ghi chú Cụm 8 (13/10/2026) — Phase 1 backend HOÀN THÀNH:**
+- **Unit test mới:** `AirlineServiceTest` (7 test — chuẩn hóa code, trùng 1005, status mặc định, 1004, soft delete không xóa cứng, toggle, update không đổi code), `SeatMapServiceTest` (7 test — 4 ràng buộc + upper-case cột + thiếu trường), `HtmlSanitizerTest` (5 test — strip script/onerror/iframe, giữ thẻ an toàn, null). Tổng **45/45 test pass**.
+- **Kiểm tra `@PreAuthorize`:** 80 endpoint (không tính base). 15 endpoint không có `@PreAuthorize` — **đã rà từng cái, tất cả là public hợp lệ**: `register`/`login`/`refresh`/`password-reset/request`/`password-reset/confirm` + GET list/detail của Airline/City/Airport/News/Promotion (đúng ký hiệu **P** ở spec). Phủ quyền đầy đủ.
+- **Rà BR-LIST-04:** 9/9 service có `search()` đều lọc `isFalse(root.get("isDeleted"))`; `UserService` lọc trong Specification. Không có `findAll()` trần lộ bản ghi xóa mềm. `RbacService` dùng role/permission (catalog cố định, không có cột `is_deleted`) — đúng.
+- **Tài liệu cập nhật:** `Tech_Stack_Website_Dat_Ve_May_Bay.md` (V1–V11, jsoup, JUnit/Mockito 45 test, cấu trúc package thật, quy ước snake_case + sort whitelist); tạo **`API_Design_..._v0.3.md`** — chốt 6 open item (Redis reset token, blacklist+refresh token, ADMIN reset trả mật khẩu tạm, News HTML+jsoup) + ghi 3 bổ sung V10 + khác biệt khi triển khai (GET public, `/auth/refresh`, `reset_token` trong response).
+
+**→ Phase 1 backend xong toàn bộ cụm 0–8.** Chưa chạy migration lên Aiven (quyết định #3) — user tự backup rồi chạy V4–V11.
+
 ---
 
-## 7. Open items cần chốt
+## 5b. Các cụm bổ sung (17/10/2026) — CHƯA TRIỂN KHAI
+
+> **Bối cảnh:** sau Phase 1 phát sinh 3 nhóm việc: (a) đồng bộ tài liệu v0.5/v0.4/v2.1, (b) vá lỗ hổng bảo mật phát hiện khi rà code, (c) thay đổi nghiệp vụ (bỏ ví/hoàn tiền).
+>
+> **Thứ tự đã chốt: Cụm 10 → Cụm 9 → Cụm 11** (số cụm = thứ tự làm). Lý do: Flyway chạy theo số tăng dần nên **V12 (color_hex) phải có trước V13 (drop ví)**. Mỗi cụm commit riêng để dễ rollback.
+
+### Cụm 10 — `color_hex` cho loại ghế (rủi ro thấp) — LÀM TRƯỚC
+
+| # | Việc | File liên quan | Cách làm |
+|---|---|---|---|
+| 10.1 | Migration **V12** | `V12__seat_type_color.sql` | `ALTER TABLE seat_types ADD COLUMN color_hex VARCHAR(7) NULL;` + `CHECK (color_hex IS NULL OR color_hex ~ '^#[0-9A-Fa-f]{6}$')` |
+| 10.2 | Entity `SeatType` | `entity/SeatType.java` | Thêm `@Column(name = "color_hex", length = 7) private String colorHex;` |
+| 10.3 | DTO + Mapper | `SeatTypeRequest`, `SeatTypeResponse`, `SeatTypeMapper` | Thêm `color_hex`; validate regex ở request (`@Pattern`) |
+| 10.4 | Seat map response | `SeatMapResponse` | Trả `color_hex` trong `seat_type` lồng |
+| 10.5 | Test | `SeatTypeServiceTest` (nếu có) | Hex sai → 1001; `null` hợp lệ |
+
+**Nghiệm thu:** tạo/sửa loại ghế có `color_hex`; sai định dạng → 1001; `null` OK; `GET /aircrafts/{id}/seat-map` trả `color_hex`.
+
+---
+
+### Cụm 9 — Vá 4 lỗ hổng bảo mật + bỏ ví (⚠️ ưu tiên cao) — LÀM SAU CỤM 10
+
+| # | Việc | File liên quan | Cách làm |
+|---|---|---|---|
+| 9.1 | **Chặn `DRAFT` ở chi tiết News** | `NewsController`, `NewsService` | Override `getById`: khách (không có `NEWS_READ_DETAIL`) + `status != PUBLISHED` → ném `ResourceNotFoundException` (**1004**, không phải 1003) |
+| 9.2 | **`PUT /news/{id}/active` thiếu quyền** | `NewsController` | Override `toggleActive` với `hasAuthority('NEWS_UPDATE')`. **Khuyến nghị: bỏ hẳn route base** — đã có `publish`/`unpublish` chuyên biệt |
+| 9.3 | **ADMIN xóa được ADMIN** | `UserService.delete` | Nếu role bản ghi = `ADMIN` → `BusinessException` 1006 "Không thể xóa tài khoản ADMIN". Giữ ràng buộc "ADMIN cuối cùng" làm lớp 2. **Chỉ áp DELETE**, không áp đổi role |
+| 9.4 | Migration **V13** | `V13__drop_wallet_and_refund.sql` | `DROP TABLE wallet_transactions;` → `DROP TABLE wallets;` → `ALTER TABLE bookings DROP COLUMN applied_refund_percent, DROP COLUMN refund_amount;` → xóa `role_permissions` + `permissions` của `WALLET_READ_SELF` |
+| 9.5 | Xóa code ví | `entity/Wallet`, `WalletTransaction`, `WalletTransactionType`; `repository/Wallet*Repository`; `service/UserService.create`; `service/AuthService.register`; `config/DataInitializer` | Xóa 3 entity + 2 repository; bỏ đoạn tạo ví ở register / create user / seed admin |
+| 9.6 | Cập nhật test | `src/test/...` | Sửa test assert có ví; thêm test cho 9.1/9.2/9.3 |
+
+**Nghiệm thu (curl):**
+- Khách GET bài DRAFT → **1004**
+- CUSTOMER gọi `PUT /news/{id}/active` → **1003**
+- ADMIN xóa ADMIN khác → **1006**; ADMIN xóa STAFF → **1000**
+- Register CUSTOMER mới → **không** còn tạo dòng `wallets`
+- `mvn test` pass; app start profile `local` (Flyway chạy V12 + V13) OK
+
+---
+
+### Cụm 11 — Tách `/admin` `/public` + bỏ `/v1` + bulk (rủi ro CAO) — LÀM CUỐI
+
+> Chạm **14 controller + SecurityConfig**. Breaking change toàn bộ API — FE phải đổi đồng thời.
+
+| # | Việc | Chi tiết |
+|---|---|---|
+| 11.1 | Bỏ `/v1` | `/api/v1/<x>` → `/api/<x>` ở mọi controller + `SecurityConfig` (8 matcher) |
+| 11.2 | Tách vùng path | Quản trị → `/api/admin/<x>`; khách đọc → `/api/public/<x>` (bảng đầy đủ: API v0.4 mục 2.11) |
+| 11.3 | Tách controller cho module 2 vùng | News, NewsCategory, Airline, City, Airport, Promotion — mỗi module **2 controller** (public chỉ GET) |
+| 11.4 | `SecurityConfig` | `permitAll` cho `/api/public/**` (chỉ GET); `/api/admin/**` = authenticated; `/api/auth/**` public |
+| 11.5 | Endpoint bulk | `PATCH /api/admin/{resource}/bulk` + `DELETE /api/admin/{resource}/bulk` ở `BaseCrudController`/`BaseCrudService` |
+| 11.6 | Cập nhật test + curl | Toàn bộ path trong test phải đổi |
+
+**Nghiệm thu:** `/api/public/airlines` không token → 1000; `/api/admin/airlines` không token → 1002; CUSTOMER gọi `/api/admin/users` → 1003; path cũ `/api/v1/*` → 404.
+
+**Phối hợp FE:** `frontend/docs/plans/2026-10-17-yeu-cau-chinh-sua-tu-be.md` (nhánh `binh`).
+
+---
+
+## 6. Bảng theo dõi cụm
 
 | # | Vấn đề | Đề xuất | Ảnh hưởng |
 |---|---|---|---|

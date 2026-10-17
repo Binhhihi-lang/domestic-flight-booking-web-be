@@ -23,7 +23,7 @@ Tài liệu chốt **hợp đồng API (contract)** giữa Backend và Frontend 
 
 | Mục | Giá trị |
 |---|---|
-| Base path | `/api/v1` |
+| Base path | `/api` |
 | Content-Type | `application/json; charset=UTF-8` |
 | Versioning | Theo path segment (`/v1`). Khi breaking change → `/v2`, giữ `/v1` chạy song song |
 
@@ -153,12 +153,12 @@ Bảng `users`. Nguồn: AUTH-01 → AUTH-06.
 
 | # | Method | Path | Quyền | UC |
 |---|---|---|---|---|
-| 1 | POST | `/api/v1/auth/register` | P (GUEST-only) | AUTH-01 |
-| 2 | POST | `/api/v1/auth/login` | P | AUTH-02 |
-| 3 | POST | `/api/v1/auth/logout` | A — `LOGOUT` | AUTH-03 |
-| 4 | POST | `/api/v1/auth/password-reset/request` | P | AUTH-04 |
-| 5 | POST | `/api/v1/auth/password-reset/confirm` | P | AUTH-04 |
-| 6 | POST | `/api/v1/auth/change-password` | A — `PASSWORD_CHANGE_SELF` | AUTH-05 |
+| 1 | POST | `/api/auth/register` | P (GUEST-only) | AUTH-01 |
+| 2 | POST | `/api/auth/login` | P | AUTH-02 |
+| 3 | POST | `/api/auth/logout` | A — `LOGOUT` | AUTH-03 |
+| 4 | POST | `/api/auth/password-reset/request` | P | AUTH-04 |
+| 5 | POST | `/api/auth/password-reset/confirm` | P | AUTH-04 |
+| 6 | POST | `/api/auth/change-password` | A — `PASSWORD_CHANGE_SELF` | AUTH-05 |
 
 **POST `/auth/register`** — request:
 
@@ -226,8 +226,8 @@ Nguồn: PRO-01, PRO-02. Luôn thao tác trên user trong token.
 
 | # | Method | Path | Quyền |
 |---|---|---|---|
-| 7 | GET | `/api/v1/profile` | A — `PROFILE_READ_SELF` |
-| 8 | PUT | `/api/v1/profile` | A — `PROFILE_UPDATE_SELF` |
+| 7 | GET | `/api/profile` | A — `PROFILE_READ_SELF` |
+| 8 | PUT | `/api/profile` | A — `PROFILE_UPDATE_SELF` |
 
 `GET /profile` trả về chính user đang đăng nhập (cấu trúc như `data` của register).
 
@@ -239,7 +239,7 @@ Nguồn: PRO-01, PRO-02. Luôn thao tác trên user trong token.
 
 `email`, `status`, `roles` **không** sửa được qua endpoint này (email đổi qua luồng riêng; status/role chỉ ADMIN qua module User). Gửi field ngoài whitelist → bỏ qua, không lỗi.
 
-**Upload avatar:** `POST /api/v1/profile/avatar` (multipart/form-data, field `file`) → trả `{ "avatar_url": "..." }`. Ảnh lưu qua Cloudinary (đã cấu hình trong `application-dev.properties`).
+**Upload avatar:** `POST /api/profile/avatar` (multipart/form-data, field `file`) → trả `{ "avatar_url": "..." }`. Ảnh lưu qua Cloudinary (đã cấu hình trong `application-dev.properties`).
 
 ### 2.3 User Management (ADMIN)
 
@@ -247,11 +247,11 @@ Bảng `users`, `user_roles`. Nguồn: USR-01 → USR-05.
 
 | # | Method | Path | Quyền |
 |---|---|---|---|
-| 9 | GET | `/api/v1/users` | A — `USER_READ` |
-| 10 | GET | `/api/v1/users/{id}` | A — `USER_READ_DETAIL` |
-| 11 | POST | `/api/v1/users` | A — `USER_CREATE` |
-| 12 | PUT | `/api/v1/users/{id}` | A — `USER_UPDATE` |
-| 13 | DELETE | `/api/v1/users/{id}` | A — `USER_DELETE` |
+| 9 | GET | `/api/users` | A — `USER_READ` |
+| 10 | GET | `/api/users/{id}` | A — `USER_READ_DETAIL` |
+| 11 | POST | `/api/users` | A — `USER_CREATE` |
+| 12 | PUT | `/api/users/{id}` | A — `USER_UPDATE` |
+| 13 | DELETE | `/api/users/{id}` | A — `USER_DELETE` |
 
 **POST `/users`** — ADMIN tạo user và **chọn role ngay khi tạo** (BR-RBAC-02):
 
@@ -293,8 +293,8 @@ Bảng `roles`, `permissions`, `role_permissions`. Nguồn: RBAC-01, RBAC-02.
 
 | # | Method | Path | Quyền |
 |---|---|---|---|
-| 14 | GET | `/api/v1/roles` | A — `ROLE_READ` |
-| 15 | GET | `/api/v1/permissions` | A — `ROLE_READ` |
+| 14 | GET | `/api/roles` | A — `ROLE_READ` |
+| 15 | GET | `/api/permissions` | A — `ROLE_READ` |
 
 **Không** có POST/PUT/DELETE cho role và permission ở MVP: role cố định, permission catalog seed và chỉ đọc (BR-RBAC-03).
 
@@ -340,17 +340,17 @@ Cả ba module dùng **cùng một khuôn** 5 endpoint. Ví dụ với Airline:
 
 | # | Method | Path | Quyền |
 |---|---|---|---|
-| 16 | GET | `/api/v1/airlines` | P — `AIRLINE_READ` |
-| 17 | GET | `/api/v1/airlines/{id}` | P — `AIRLINE_READ_DETAIL` |
-| 18 | POST | `/api/v1/airlines` | A — `AIRLINE_CREATE` |
-| 19 | PUT | `/api/v1/airlines/{id}` | A — `AIRLINE_UPDATE` |
-| 20 | DELETE | `/api/v1/airlines/{id}` | A — `AIRLINE_DELETE` |
+| 16 | GET | `/api/airlines` | P — `AIRLINE_READ` |
+| 17 | GET | `/api/airlines/{id}` | P — `AIRLINE_READ_DETAIL` |
+| 18 | POST | `/api/airlines` | A — `AIRLINE_CREATE` |
+| 19 | PUT | `/api/airlines/{id}` | A — `AIRLINE_UPDATE` |
+| 20 | DELETE | `/api/airlines/{id}` | A — `AIRLINE_DELETE` |
 
 | Module | Base path | Permission prefix | Bảng |
 |---|---|---|---|
-| Airline | `/api/v1/airlines` | `AIRLINE_` | `airlines` |
-| City | `/api/v1/cities` | `CITY_` | `cities` |
-| Airport | `/api/v1/airports` | `AIRPORT_` | `airports` |
+| Airline | `/api/airlines` | `AIRLINE_` | `airlines` |
+| City | `/api/cities` | `CITY_` | `cities` |
+| Airport | `/api/airports` | `AIRPORT_` | `airports` |
 
 **GET danh sách — public.** Trả về **chỉ** bản ghi `status = ACTIVE` cho GUEST/CUSTOMER. ADMIN/STAFF gọi cùng endpoint có thể truyền `status=INACTIVE` để xem cả bản ghi đã ngừng dùng (BR-LIST-04).
 
@@ -415,14 +415,14 @@ Bảng `aircrafts`, `seat_types`, `seat_configurations`. Nguồn: AC-01→05, SE
 
 | # | Method | Path | Quyền |
 |---|---|---|---|
-| 21 | GET | `/api/v1/aircrafts` | A — `AIRCRAFT_READ` |
-| 22 | GET | `/api/v1/aircrafts/{id}` | A — `AIRCRAFT_READ_DETAIL` |
-| 23 | POST | `/api/v1/aircrafts` | A — `AIRCRAFT_CREATE` |
-| 24 | PUT | `/api/v1/aircrafts/{id}` | A — `AIRCRAFT_UPDATE` |
-| 25 | DELETE | `/api/v1/aircrafts/{id}` | A — `AIRCRAFT_DELETE` |
-| 26 | GET | `/api/v1/seat-types` | A — `SEAT_CONFIG_READ` |
-| 27 | GET | `/api/v1/aircrafts/{id}/seat-configurations` | A — `SEAT_CONFIG_READ_DETAIL` |
-| 28 | PUT | `/api/v1/aircrafts/{id}/seat-configurations` | A — `SEAT_CONFIG_UPDATE` |
+| 21 | GET | `/api/aircrafts` | A — `AIRCRAFT_READ` |
+| 22 | GET | `/api/aircrafts/{id}` | A — `AIRCRAFT_READ_DETAIL` |
+| 23 | POST | `/api/aircrafts` | A — `AIRCRAFT_CREATE` |
+| 24 | PUT | `/api/aircrafts/{id}` | A — `AIRCRAFT_UPDATE` |
+| 25 | DELETE | `/api/aircrafts/{id}` | A — `AIRCRAFT_DELETE` |
+| 26 | GET | `/api/seat-types` | A — `SEAT_CONFIG_READ` |
+| 27 | GET | `/api/aircrafts/{id}/seat-configurations` | A — `SEAT_CONFIG_READ_DETAIL` |
+| 28 | PUT | `/api/aircrafts/{id}/seat-configurations` | A — `SEAT_CONFIG_UPDATE` |
 
 **Khác biệt so với Master Data ở 2.5: Aircraft KHÔNG public** — chỉ `STAFF`/`ADMIN` (AC-01, AC-05). GUEST/CUSTOMER không truy cập được.
 
@@ -469,11 +469,11 @@ Bảng `promotions`. Nguồn: PROMO-01 → PROMO-05.
 
 | # | Method | Path | Quyền |
 |---|---|---|---|
-| 29 | GET | `/api/v1/promotions` | P — `PROMOTION_READ` |
-| 30 | GET | `/api/v1/promotions/{id}` | P — `PROMOTION_READ_DETAIL` |
-| 31 | POST | `/api/v1/promotions` | A — `PROMOTION_CREATE` |
-| 32 | PUT | `/api/v1/promotions/{id}` | A — `PROMOTION_UPDATE` |
-| 33 | DELETE | `/api/v1/promotions/{id}` | A — `PROMOTION_DELETE` |
+| 29 | GET | `/api/promotions` | P — `PROMOTION_READ` |
+| 30 | GET | `/api/promotions/{id}` | P — `PROMOTION_READ_DETAIL` |
+| 31 | POST | `/api/promotions` | A — `PROMOTION_CREATE` |
+| 32 | PUT | `/api/promotions/{id}` | A — `PROMOTION_UPDATE` |
+| 33 | DELETE | `/api/promotions/{id}` | A — `PROMOTION_DELETE` |
 
 **POST `/promotions`**:
 
@@ -505,14 +505,14 @@ Bảng `vouchers`, `user_vouchers`. Nguồn: VOU-01 → VOU-05.
 
 | # | Method | Path | Quyền |
 |---|---|---|---|
-| 34 | GET | `/api/v1/vouchers` | A — `VOUCHER_READ` |
-| 35 | GET | `/api/v1/vouchers/{id}` | A — `VOUCHER_READ_DETAIL` |
-| 36 | POST | `/api/v1/vouchers` | A — `VOUCHER_CREATE` |
-| 37 | PUT | `/api/v1/vouchers/{id}` | A — `VOUCHER_UPDATE` |
-| 38 | DELETE | `/api/v1/vouchers/{id}` | A — `VOUCHER_DELETE` |
-| 39 | GET | `/api/v1/my-vouchers` | A — `VOUCHER_READ` (SELF) |
-| 40 | GET | `/api/v1/my-vouchers/{id}` | A — `VOUCHER_READ_DETAIL` (SELF) |
-| 41 | POST | `/api/v1/vouchers/{id}/assign` | A — `VOUCHER_UPDATE` |
+| 34 | GET | `/api/vouchers` | A — `VOUCHER_READ` |
+| 35 | GET | `/api/vouchers/{id}` | A — `VOUCHER_READ_DETAIL` |
+| 36 | POST | `/api/vouchers` | A — `VOUCHER_CREATE` |
+| 37 | PUT | `/api/vouchers/{id}` | A — `VOUCHER_UPDATE` |
+| 38 | DELETE | `/api/vouchers/{id}` | A — `VOUCHER_DELETE` |
+| 39 | GET | `/api/my-vouchers` | A — `VOUCHER_READ` (SELF) |
+| 40 | GET | `/api/my-vouchers/{id}` | A — `VOUCHER_READ_DETAIL` (SELF) |
+| 41 | POST | `/api/vouchers/{id}/assign` | A — `VOUCHER_UPDATE` |
 
 **POST `/vouchers`** (ADMIN):
 
@@ -568,18 +568,18 @@ Bảng `news_items`, `news_categories`, `news_category_mapping`. Nguồn: NEWS-0
 
 | # | Method | Path | Quyền |
 |---|---|---|---|
-| 42 | GET | `/api/v1/news` | P — `NEWS_READ` |
-| 43 | GET | `/api/v1/news/{id}` | P — `NEWS_READ_DETAIL` |
-| 44 | POST | `/api/v1/news` | A — `NEWS_CREATE` |
-| 45 | PUT | `/api/v1/news/{id}` | A — `NEWS_UPDATE` |
-| 46 | DELETE | `/api/v1/news/{id}` | A — `NEWS_DELETE` |
-| 47 | POST | `/api/v1/news/{id}/publish` | A — `NEWS_PUBLISH` |
-| 48 | POST | `/api/v1/news/{id}/unpublish` | A — `NEWS_UNPUBLISH` |
-| 49 | GET | `/api/v1/news-categories` | A — `NEWS_CATEGORY_READ` |
-| 50 | GET | `/api/v1/news-categories/{id}` | A — `NEWS_CATEGORY_READ_DETAIL` |
-| 51 | POST | `/api/v1/news-categories` | A — `NEWS_CATEGORY_CREATE` |
-| 52 | PUT | `/api/v1/news-categories/{id}` | A — `NEWS_CATEGORY_UPDATE` |
-| 53 | DELETE | `/api/v1/news-categories/{id}` | A — `NEWS_CATEGORY_DELETE` |
+| 42 | GET | `/api/news` | P — `NEWS_READ` |
+| 43 | GET | `/api/news/{id}` | P — `NEWS_READ_DETAIL` |
+| 44 | POST | `/api/news` | A — `NEWS_CREATE` |
+| 45 | PUT | `/api/news/{id}` | A — `NEWS_UPDATE` |
+| 46 | DELETE | `/api/news/{id}` | A — `NEWS_DELETE` |
+| 47 | POST | `/api/news/{id}/publish` | A — `NEWS_PUBLISH` |
+| 48 | POST | `/api/news/{id}/unpublish` | A — `NEWS_UNPUBLISH` |
+| 49 | GET | `/api/news-categories` | A — `NEWS_CATEGORY_READ` |
+| 50 | GET | `/api/news-categories/{id}` | A — `NEWS_CATEGORY_READ_DETAIL` |
+| 51 | POST | `/api/news-categories` | A — `NEWS_CATEGORY_CREATE` |
+| 52 | PUT | `/api/news-categories/{id}` | A — `NEWS_CATEGORY_UPDATE` |
+| 53 | DELETE | `/api/news-categories/{id}` | A — `NEWS_CATEGORY_DELETE` |
 
 **POST `/news`** (ADMIN):
 
@@ -614,17 +614,17 @@ Chỉ liệt kê để hai repo dùng thống nhất tên; đặc tả chi tiế
 
 | Method | Path | Quyền dự kiến |
 |---|---|---|
-| GET | `/api/v1/flights/search` | P — `FLIGHT_SEARCH` |
-| GET | `/api/v1/flights` | P — `FLIGHT_READ` |
-| GET | `/api/v1/flights/{id}` | P — `FLIGHT_DETAIL_READ` |
-| POST/PUT | `/api/v1/flights`, `/api/v1/flights/{id}` | A — `FLIGHT_CREATE` / `FLIGHT_UPDATE` |
-| POST | `/api/v1/flights/{id}/activate`, `/deactivate` | A — `FLIGHT_ACTIVATE` / `FLIGHT_DEACTIVATE` |
-| GET/POST/PUT/DELETE | `/api/v1/fare-classes` | A — `FARE_CLASS_*` |
-| GET/POST/PUT/DELETE | `/api/v1/flight-fares` | A — `FLIGHT_FARE_*` |
-| GET/POST/PUT/DELETE | `/api/v1/baggage-options` | A — `BAGGAGE_*` |
-| GET | `/api/v1/flights/{id}/seat-map` | A — `SEAT_INVENTORY_READ_DETAIL` |
-| PUT | `/api/v1/flights/{id}/seat-inventory` | A — `SEAT_INVENTORY_MANAGE` |
-| GET/POST/PUT/DELETE | `/api/v1/fare-rules` | A — `FARE_RULE_*` |
+| GET | `/api/flights/search` | P — `FLIGHT_SEARCH` |
+| GET | `/api/flights` | P — `FLIGHT_READ` |
+| GET | `/api/flights/{id}` | P — `FLIGHT_DETAIL_READ` |
+| POST/PUT | `/api/flights`, `/api/flights/{id}` | A — `FLIGHT_CREATE` / `FLIGHT_UPDATE` |
+| POST | `/api/flights/{id}/activate`, `/deactivate` | A — `FLIGHT_ACTIVATE` / `FLIGHT_DEACTIVATE` |
+| GET/POST/PUT/DELETE | `/api/fare-classes` | A — `FARE_CLASS_*` |
+| GET/POST/PUT/DELETE | `/api/flight-fares` | A — `FLIGHT_FARE_*` |
+| GET/POST/PUT/DELETE | `/api/baggage-options` | A — `BAGGAGE_*` |
+| GET | `/api/flights/{id}/seat-map` | A — `SEAT_INVENTORY_READ_DETAIL` |
+| PUT | `/api/flights/{id}/seat-inventory` | A — `SEAT_INVENTORY_MANAGE` |
+| GET/POST/PUT/DELETE | `/api/fare-rules` | A — `FARE_RULE_*` |
 
 Flight Search nhận `departure_airport_id`, `arrival_airport_id`, `departure_date`, `passengers`, `trip_type` — khớp index `idx_flights_route_departure`.
 
@@ -632,22 +632,22 @@ Flight Search nhận `departure_airport_id`, `arrival_airport_id`, `departure_da
 
 | Method | Path | Quyền dự kiến |
 |---|---|---|
-| POST | `/api/v1/bookings` | A — `BOOKING_CREATE` |
-| GET | `/api/v1/bookings` | A — `BOOKING_READ_SELF` |
-| GET | `/api/v1/bookings/{id}` | A — `BOOKING_READ_SELF` |
-| POST | `/api/v1/bookings/{id}/cancel` | A — `BOOKING_CANCEL_SELF` |
-| POST | `/api/v1/bookings/{id}/passengers` | A — `PASSENGER_CREATE` |
-| POST | `/api/v1/bookings/{id}/seats/hold` | A — `BOOKING_CREATE` |
-| POST | `/api/v1/bookings/{id}/baggages` | A — `BOOKING_CREATE` |
-| POST | `/api/v1/bookings/{id}/voucher` | A — `VOUCHER_APPLY` |
-| POST | `/api/v1/bookings/{id}/payments` | A — `PAYMENT_CREATE` |
-| GET | `/api/v1/payments/{id}` | A — `PAYMENT_READ_SELF` |
-| POST | `/api/v1/payments/callback` | P (gateway callback, xác thực bằng chữ ký) |
-| GET | `/api/v1/bookings/{id}/e-tickets` | A — `ETICKET_READ_SELF` |
-| GET | `/api/v1/admin/bookings` | A — `BOOKING_READ` (STAFF) |
-| GET | `/api/v1/dashboard/operational` | A — `DASHBOARD_READ_OPERATIONAL` |
-| GET | `/api/v1/dashboard` | A — `DASHBOARD_READ` |
-| GET | `/api/v1/notifications` | A — `NOTIFICATION_READ_SELF` |
+| POST | `/api/bookings` | A — `BOOKING_CREATE` |
+| GET | `/api/bookings` | A — `BOOKING_READ_SELF` |
+| GET | `/api/bookings/{id}` | A — `BOOKING_READ_SELF` |
+| POST | `/api/bookings/{id}/cancel` | A — `BOOKING_CANCEL_SELF` |
+| POST | `/api/bookings/{id}/passengers` | A — `PASSENGER_CREATE` |
+| POST | `/api/bookings/{id}/seats/hold` | A — `BOOKING_CREATE` |
+| POST | `/api/bookings/{id}/baggages` | A — `BOOKING_CREATE` |
+| POST | `/api/bookings/{id}/voucher` | A — `VOUCHER_APPLY` |
+| POST | `/api/bookings/{id}/payments` | A — `PAYMENT_CREATE` |
+| GET | `/api/payments/{id}` | A — `PAYMENT_READ_SELF` |
+| POST | `/api/payments/callback` | P (gateway callback, xác thực bằng chữ ký) |
+| GET | `/api/bookings/{id}/e-tickets` | A — `ETICKET_READ_SELF` |
+| GET | `/api/admin/bookings` | A — `BOOKING_READ` (STAFF) |
+| GET | `/api/dashboard/operational` | A — `DASHBOARD_READ_OPERATIONAL` |
+| GET | `/api/dashboard` | A — `DASHBOARD_READ` |
+| GET | `/api/notifications` | A — `NOTIFICATION_READ_SELF` |
 
 **Booking của GUEST: không tồn tại.** GUEST muốn đặt vé phải đăng nhập/đăng ký CUSTOMER (Approved Baseline Decision).
 

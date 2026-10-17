@@ -15,6 +15,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.io.IOException;
 
 /**
+ * Bắt lỗi 403
  * Lỗi phân quyền ở tầng filter chain (URL matcher) → 1003.
  * Token hợp lệ nhưng authorities RỖNG (user bị khóa/xóa mềm) cũng trả 1003 để
  * client xóa phiên và đăng nhập lại.

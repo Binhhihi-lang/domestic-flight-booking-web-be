@@ -1,0 +1,264 @@
+@startuml 00-Kien-truc-chung
+' ===================================================================
+' SƠ ĐỒ LỚP — 00. KIẾN TRÚC CHUNG (khung 4 tầng)
+' Website Đặt Vé Máy Bay Nội Địa — DB v0.5 / API v0.4
+'
+' File này vẽ KHUNG kiến trúc dùng chung cho MỌI module:
+'   Controller  →  Service  →  Repository  →  Entity
+' Các module cụ thể nằm ở 01/02/03-phase*.puml (kế thừa các lớp ở đây).
+' ===================================================================
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam nodesep 16
+skinparam ranksep 40
+skinparam classFontSize 12
+skinparam classBackgroundColor #FEFEFE
+skinparam classBorderColor #4A6785
+skinparam abstractClassBackgroundColor #E8EEF5
+skinparam noteBackgroundColor #FFFDE7
+skinparam noteBorderColor #C0A000
+skinparam arrowColor #4A6785
+
+title Sơ đồ lớp — 00. Kiến trúc chung (khung 4 tầng)
+
+' ============================================================
+' TẦNG 1 — CONTROLLER
+' ============================================================
+package "Tầng 1 · Controller (REST API)" #F2F7FB {
+
+  abstract class BaseCrudController<T, ID, Req, Resp> {
+    # service : BaseCrudService<T, ID, Req, Resp>
+    ..
+    # BaseCrudController(service)
+    # list(query : ListQuery, filters : Map) : ApiResponse<PageData<Resp>>
+    # filters(keyValues : Object...) : Map<String, String>
+    + getById(id : ID) : ApiResponse<Resp>
+    + create(request : Req) : ResponseEntity<ApiResponse<Resp>>
+    + update(id : ID, request : Req) : ApiResponse<Resp>
+    + toggleActive(id : ID, value : boolean) : ApiResponse<Resp>
+    + delete(id : ID) : ApiResponse<Void>
+  }
+
+  class AuthController {
+    - authService : AuthService
+    ..
+    + register(request : RegisterRequest) : ResponseEntity<ApiResponse<UserResponse>>
+    + login(request : LoginRequest) : ApiResponse<LoginResponse>
+    + logout(authorization : String) : ApiResponse<Void>
+    + refresh(body : RefreshTokenBody) : ApiResponse<LoginResponse>
+    + requestPasswordReset(request) : ApiResponse<PasswordResetResponse>
+    + confirmPasswordReset(request) : ApiResponse<Void>
+    + changePassword(request) : ApiResponse<Void>
+  }
+
+  class ProfileController {
+    - profileService : ProfileService
+    ..
+    + getProfile() : ApiResponse<UserResponse>
+    + updateProfile(request : UpdateProfileRequest) : ApiResponse<UserResponse>
+    + uploadAvatar(file : MultipartFile) : ApiResponse<Map<String, String>>
+  }
+}
+
+' ============================================================
+' TẦNG 2 — SERVICE
+' ============================================================
+package "Tầng 2 · Service (nghiệp vụ)" #F5F2FB {
+
+  abstract class BaseCrudService<T, ID, Req, Resp> {
+    # repository : JpaRepository<T, ID>
+    ..
+    # {abstract} resourceName() : String
+    # {abstract} toResponse(entity : T) : Resp
+    # {abstract} createEntity(request : Req) : T
+    # {abstract} updateEntity(entity : T, request : Req) : void
+    # {abstract} softDelete(entity : T) : void
+    # {abstract} setActive(entity : T, active : boolean) : void
+    # {abstract} search(query : ListQuery, filters : Map) : Page<T>
+    ..
+    + list(query : ListQuery, filters : Map) : PageData<Resp>
+    + getById(id : ID) : Resp
+    + create(request : Req) : Resp
+    + update(id : ID, request : Req) : Resp
+    + toggleActive(id : ID, active : boolean) : Resp
+    + delete(id : ID) : void
+    # findOrThrow(id : ID) : T
+  }
+
+  abstract class BaseMapper<E, Resp> {
+    + {abstract} toResponse(entity : E) : Resp
+  }
+
+  class AuthService {
+    - userRepository : UserRepository
+    - roleRepository : RoleRepository
+    - refreshTokenRepository : RefreshTokenRepository
+    - invalidatedTokenRepository : InvalidatedTokenRepository
+    - passwordResetTokenRepository : PasswordResetTokenRepository
+    - passwordEncoder : PasswordEncoder
+    - jwtService : JwtService
+    ..
+    + register(request : RegisterRequest) : UserResponse
+    + login(request : LoginRequest) : LoginResponse
+    + logout(token : String) : void
+    + refresh(refreshToken : String) : LoginResponse
+    + requestPasswordReset(email : String) : PasswordResetResponse
+    + confirmPasswordReset(token : String, newPassword : String) : void
+    + changePassword(userId : Long, request : ChangePasswordRequest) : void
+  }
+
+  class ProfileService {
+    - userRepository : UserRepository
+    - cloudinaryService : CloudinaryService
+    ..
+    + getProfile(userId : Long) : UserResponse
+    + updateProfile(userId : Long, request : UpdateProfileRequest) : UserResponse
+    + uploadAvatar(userId : Long, file : MultipartFile) : String
+  }
+
+  class CloudinaryService {
+    + upload(file : MultipartFile) : String
+    + delete(publicId : String) : void
+  }
+}
+
+' ============================================================
+' TẦNG 3 — REPOSITORY
+' ============================================================
+package "Tầng 3 · Repository (truy cập dữ liệu)" #F2FBF5 {
+
+  interface JpaRepository<T, ID> <<interface>> {
+    + save(entity : T) : T
+    + findById(id : ID) : Optional<T>
+    + findAll() : List<T>
+    + findAll(spec : Specification, pageable : Pageable) : Page<T>
+    + delete(entity : T) : void
+  }
+
+  class UserRepository <<interface>> {
+    + findByEmail(email : String) : Optional<User>
+    + existsByEmailAndIsDeletedFalse(email : String) : boolean
+    + findByRoleName(name : String) : List<User>
+  }
+
+  class RoleRepository <<interface>> {
+    + findByName(name : String) : Optional<Role>
+  }
+}
+
+' ============================================================
+' TẦNG 4 — ENTITY (lớp cơ sở)
+' ============================================================
+package "Tầng 4 · Entity (lớp cơ sở)" #FBF5F2 {
+
+  abstract class BaseEntity {
+    - id : Long
+    - createdAt : LocalDateTime
+    - updatedAt : LocalDateTime
+  }
+
+  abstract class SoftDeletableEntity {
+    - isActive : Boolean
+    - isDeleted : Boolean
+    - deletedAt : LocalDateTime
+  }
+}
+
+' ============================================================
+' CROSS-CUTTING — dùng chung mọi tầng
+' ============================================================
+package "Dùng chung (common)" #F7F7F7 {
+  class ApiResponse<T> {
+    - code : int
+    - message : String
+    - data : T
+    ..
+    + {static} success(data : T) : ApiResponse<T>
+    + {static} success(message : String, data : T) : ApiResponse<T>
+    + {static} error(code : int, message : String) : ApiResponse<T>
+  }
+
+  class PageData<T> {
+    - items : List<T>
+    - pagination : Pagination
+  }
+
+  class ListQuery {
+    - page : int
+    - size : int
+    - keyword : String
+    - sort : String
+    ..
+    + getKeywordOrNull() : String
+  }
+
+  class ErrorCode <<enumeration>> {
+    SUCCESS(1000)
+    VALIDATION_ERROR(1001)
+    UNAUTHENTICATED(1002)
+    ACCESS_DENIED(1003)
+    RESOURCE_NOT_FOUND(1004)
+    DUPLICATE_RESOURCE(1005)
+    BUSINESS_RULE_VIOLATION(1006)
+    INVALID_CREDENTIALS(1007)
+    ACCOUNT_INACTIVE(1008)
+    INTERNAL_ERROR(9999)
+  }
+}
+
+' ============================================================
+' QUAN HỆ GIỮA CÁC TẦNG
+' ============================================================
+BaseCrudController --> BaseCrudService : «dùng»
+BaseCrudService --> JpaRepository : «dùng»
+BaseCrudService ..> BaseMapper : «dùng»
+AuthController --> AuthService
+ProfileController --> ProfileService
+AuthService --> UserRepository
+AuthService --> RoleRepository
+ProfileService --> UserRepository
+ProfileService --> CloudinaryService
+
+BaseCrudController ..> ApiResponse : «trả về»
+BaseCrudService ..> PageData : «trả về»
+BaseCrudController ..> ListQuery : «nhận»
+BaseCrudService ..> ErrorCode : «ném lỗi»
+
+SoftDeletableEntity --|> BaseEntity
+UserRepository ..|> JpaRepository
+RoleRepository ..|> JpaRepository
+
+' ============================================================
+' GHI CHÚ
+' ============================================================
+note bottom of BaseCrudController
+  Mẫu TEMPLATE METHOD:
+  định nghĩa khung 6 thao tác CRUD dùng chung.
+  Lớp con (ở 01/02/03-phase) chỉ override:
+    - phân quyền @PreAuthorize từng endpoint
+    - khai @RequestMapping path
+    - thêm filter riêng của module
+end note
+
+note bottom of BaseCrudService
+  Mẫu TEMPLATE METHOD:
+  list/getById/create/update/toggleActive/delete
+  gọi các phương thức abstract mà lớp con cài đặt.
+  Lớp con override createEntity / updateEntity /
+  softDelete / setActive / search / toResponse.
+end note
+
+note bottom of BaseEntity
+  Mọi entity kế thừa BaseEntity (id + created/updated).
+  SoftDeletableEntity thêm isActive + isDeleted + deletedAt
+  cho các bảng danh mục (Airline, City, ...).
+end note
+
+note bottom of ApiResponse
+  Mọi response (thành công và lỗi) đều bọc trong envelope:
+  { code, message, data }
+  Xem API Design v0.4 mục 1.3.
+end note
+
+@enduml

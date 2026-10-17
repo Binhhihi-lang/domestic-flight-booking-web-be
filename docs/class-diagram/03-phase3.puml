@@ -1,0 +1,340 @@
+@startuml 03-Phase3
+' ===================================================================
+' SƠ ĐỒ LỚP — 03. PHASE 3: BOOKING CORE
+' Website Đặt Vé Máy Bay Nội Địa — DB v0.5 / API v0.4
+'
+' 9 module: Booking · BookingSegment · Passenger · SeatHold
+'           · BookingBaggage · Payment · ETicket · Dashboard
+'           (Nhóm Wallet/Ví ĐÃ BỎ 15/10/2026)
+' Lớp cơ sở (Base*) xem file 00-kien-truc-chung.puml.
+' ===================================================================
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam nodesep 14
+skinparam ranksep 38
+skinparam classFontSize 11
+skinparam classBackgroundColor #FEFEFE
+skinparam classBorderColor #4A6785
+skinparam abstractClassBackgroundColor #E8EEF5
+skinparam noteBackgroundColor #FFFDE7
+skinparam noteBorderColor #C0A000
+skinparam arrowColor #4A6785
+
+title Sơ đồ lớp — 03. Phase 3 · Booking Core
+
+' ============================================================
+' 1. BOOKING (khách)
+' ============================================================
+package "1 · Booking (khách đặt vé)" #F2F7FB {
+
+  class BookingController {
+    - bookingService : BookingService
+    ..
+    + create(BookingRequest) : ResponseEntity<ApiResponse<BookingDetailResponse>>
+    + listSelf(ListQuery) : ApiResponse<PageData<BookingSummaryResponse>>
+    + getSelf(Long) : ApiResponse<BookingDetailResponse>
+    + cancel(Long, CancelRequest) : ApiResponse<BookingDetailResponse>
+    + addPassengers(Long, PassengerListRequest) : ApiResponse<BookingDetailResponse>
+    + applyVoucher(Long, ApplyVoucherRequest) : ApiResponse<BookingDetailResponse>
+    + addBaggages(Long, BaggageListRequest) : ApiResponse<BookingDetailResponse>
+  }
+
+  class AdminBookingController {
+    - bookingService : BookingService
+    ..
+    + list(ListQuery, String status, Long userId) : ApiResponse<PageData<BookingSummaryResponse>>
+    + getById(Long) : ApiResponse<BookingDetailResponse>
+  }
+
+  class BookingService {
+    - bookingRepository : BookingRepository
+    - bookingSegmentRepository : BookingSegmentRepository
+    - passengerRepository : PassengerRepository
+    - flightRepository : FlightRepository
+    - fareClassRepository : FareClassRepository
+    - fareRuleRepository : FareRuleRepository
+    - userVoucherRepository : UserVoucherRepository
+    - pricingService : PricingService
+    ..
+    + create(Long userId, BookingRequest) : BookingDetailResponse
+    + listSelf(Long userId, ListQuery) : PageData<BookingSummaryResponse>
+    + getSelf(Long userId, Long bookingId) : BookingDetailResponse
+    + cancel(Long userId, Long bookingId, CancelRequest) : BookingDetailResponse
+    + addPassengers(Long userId, Long bookingId, PassengerListRequest) : BookingDetailResponse
+    + applyVoucher(Long userId, Long bookingId, ApplyVoucherRequest) : BookingDetailResponse
+    + addBaggages(Long userId, Long bookingId, BaggageListRequest) : BookingDetailResponse
+    + listAll(ListQuery, String, Long) : PageData<BookingSummaryResponse>
+    + getById(Long bookingId) : BookingDetailResponse
+    - generateBookingCode() : String
+    - recalculateTotals(Booking) : void
+    - releaseResources(Booking) : void  «hủy vé»
+  }
+
+  class PricingService {
+    - flightFareRepository : FlightFareRepository
+    - promotionRepository : PromotionRepository
+    - voucherRepository : VoucherRepository
+    - pricingProperties : PricingProperties
+    ..
+    + priceTicket(Flight, FareClass, PassengerType) : BigDecimal
+    + applyPromotions(Booking, List<TicketLine>) : List<TicketLine>
+    + applyVoucher(Booking, UserVoucher) : BigDecimal
+    + computeTotal(Booking) : BigDecimal
+  }
+}
+
+' ============================================================
+' 2. SEAT HOLD (giữ ghế)
+' ============================================================
+package "2 · Seat Hold (giữ ghế 15 phút)" #F5F2FB {
+
+  class SeatHoldController {
+    - seatHoldService : SeatHoldService
+    ..
+    + hold(Long bookingId, HoldSeatRequest) : ApiResponse<HoldSeatResponse>
+    + release(Long bookingId, Long seatHoldId) : ApiResponse<Void>
+  }
+
+  class SeatHoldService {
+    - seatHoldRepository : SeatHoldRepository
+    - flightSeatRepository : FlightSeatRepository
+    - bookingRepository : BookingRepository
+    - passengerRepository : PassengerRepository
+    ..
+    + hold(Long bookingId, Long passengerId, Long flightSeatId) : SeatHold
+    + release(Long seatHoldId) : void
+    + confirmAll(Long bookingId) : void  «thanh toán xong»
+    + releaseExpired() : int  «job quét định kỳ»
+  }
+}
+
+' ============================================================
+' 3. PAYMENT
+' ============================================================
+package "3 · Payment (thanh toán)" #FBF5F2 {
+
+  class PaymentController {
+    - paymentService : PaymentService
+    ..
+    + create(Long bookingId, PaymentRequest) : ResponseEntity<ApiResponse<PaymentResponse>>
+    + getSelf(Long paymentId) : ApiResponse<PaymentResponse>
+    + callback(CallbackRequest) : ApiResponse<Void>  «cổng gọi»
+  }
+
+  class PaymentService {
+    - paymentRepository : PaymentRepository
+    - bookingRepository : BookingRepository
+    - seatHoldService : SeatHoldService
+    - eTicketService : ETicketService
+    ..
+    + create(Long bookingId, PaymentRequest) : PaymentResponse
+    + getSelf(Long userId, Long paymentId) : PaymentResponse
+    + handleCallback(CallbackRequest) : void  «chống trùng theo gateway_transaction_id»
+    - confirmBooking(Booking) : void
+    - failBooking(Booking, String reason) : void
+  }
+}
+
+' ============================================================
+' 4. E-TICKET
+' ============================================================
+package "4 · E-Ticket (vé điện tử)" #F2FBF5 {
+
+  class ETicketController {
+    - eTicketService : ETicketService
+    ..
+    + listByBooking(Long bookingId) : ApiResponse<List<ETicketResponse>>
+  }
+
+  class ETicketService {
+    - eTicketRepository : ETicketRepository
+    - bookingSegmentRepository : BookingSegmentRepository
+    - passengerRepository : PassengerRepository
+    ..
+    + issueForBooking(Booking) : List<ETicket>  «chỉ khi payment SUCCESS»
+    + listByBooking(Long bookingId) : List<ETicketResponse>
+    + cancelAll(Long bookingId) : void
+    - generateTicketCode() : String
+  }
+}
+
+' ============================================================
+' 5. DASHBOARD (STAFF/ADMIN)
+' ============================================================
+package "5 · Dashboard" #F7F7F7 {
+
+  class DashboardController {
+    - dashboardService : DashboardService
+    ..
+    + operational() : ApiResponse<OperationalDashboardResponse>
+    + overview() : ApiResponse<OverviewDashboardResponse>
+  }
+
+  class DashboardService {
+    - bookingRepository : BookingRepository
+    - flightRepository : FlightRepository
+    - flightSeatRepository : FlightSeatRepository
+    - paymentRepository : PaymentRepository
+    ..
+    + operational() : OperationalDashboardResponse  «chuyến sắp bay, ghế còn lại»
+    + overview() : OverviewDashboardResponse  «doanh thu, số booking»
+  }
+}
+
+' ============================================================
+' ENTITY PHASE 3
+' ============================================================
+package "Entity (Phase 3)" #FEF9F0 {
+
+  class Booking {
+    - bookingCode : String
+    - user : User
+    - tripType : TripType
+    - status : BookingStatus
+    - fareAmount : BigDecimal
+    - promotionDiscountAmount : BigDecimal
+    - voucherDiscountAmount : BigDecimal
+    - seatSurchargeAmount : BigDecimal
+    - baggageAmount : BigDecimal
+    - totalAmount : BigDecimal
+    - currency : String
+    - paymentExpiresAt : LocalDateTime
+    - cancelledAt : LocalDateTime
+    - cancelReason : String
+  }
+
+  class BookingSegment {
+    - booking : Booking
+    - flight : Flight
+    - segmentOrder : Integer
+    - fareClass : FareClass
+    - fareRule : FareRule
+    - fareAmountAtBooking : BigDecimal
+    - promotion : Promotion
+    - promotionDiscountAmount : BigDecimal
+    - currency : String
+  }
+
+  class Passenger {
+    - booking : Booking
+    - fullName : String
+    - gender : PassengerGender
+    - birthDate : LocalDate
+    - passengerType : PassengerType
+    - passportNumber : String
+    - phone : String
+    - email : String
+  }
+
+  class SeatHold {
+    - booking : Booking
+    - passenger : Passenger
+    - flightSeat : FlightSeat
+    - holdExpiresAt : LocalDateTime
+    - surchargeAtBooking : BigDecimal
+    - status : SeatHoldStatus
+    - createdAt : LocalDateTime
+  }
+
+  class BookingBaggage {
+    - booking : Booking
+    - passenger : Passenger
+    - baggageOption : BaggageOption
+    - quantity : Integer
+    - unitPriceAtBooking : BigDecimal
+    - currency : String
+  }
+
+  class Payment {
+    - booking : Booking
+    - amount : BigDecimal
+    - currency : String
+    - paymentMethod : String
+    - gatewayName : String
+    - gatewayTransactionId : String
+    - status : PaymentStatus
+    - retryCount : Integer
+    - createdAt : LocalDateTime
+    - paidAt : LocalDateTime
+  }
+
+  class ETicket {
+    - booking : Booking
+    - bookingSegment : BookingSegment
+    - passenger : Passenger
+    - flightSeat : FlightSeat
+    - ticketCode : String
+    - status : ETicketStatus
+    - issuedAt : LocalDateTime
+  }
+}
+
+' ============================================================
+' QUAN HỆ
+' ============================================================
+BookingController --> BookingService
+AdminBookingController --> BookingService
+SeatHoldController --> SeatHoldService
+PaymentController --> PaymentService
+ETicketController --> ETicketService
+DashboardController --> DashboardService
+
+BookingService --> PricingService
+PaymentService --> SeatHoldService
+PaymentService --> ETicketService
+
+User "1" -- "0..*" Booking : tạo
+Booking "1" -- "0..*" BookingSegment : có chặng
+Flight "1" -- "0..*" BookingSegment : nằm trong
+FareClass "1" -- "0..*" BookingSegment : loại vé
+FareRule "1" -- "0..*" BookingSegment : áp dụng
+Promotion "0..1" -- "0..*" BookingSegment : áp cho
+Booking "1" -- "0..*" Passenger : có hành khách
+Booking "1" -- "0..*" SeatHold : giữ ghế
+Passenger "1" -- "0..*" SeatHold : giữ
+FlightSeat "1" -- "0..*" SeatHold : được giữ
+Booking "1" -- "0..*" BookingBaggage : có hành lý
+Passenger "1" -- "0..*" BookingBaggage : mua
+BaggageOption "1" -- "0..*" BookingBaggage : được chọn
+Booking "1" -- "0..*" Payment : thanh toán
+Booking "1" -- "0..*" ETicket : phát hành
+BookingSegment "1" -- "0..*" ETicket : có vé
+Passenger "1" -- "0..*" ETicket : có vé
+FlightSeat "0..1" -- "0..*" ETicket : tham chiếu
+
+note bottom of Booking
+  KHÔNG có ví và KHÔNG tự hoàn tiền (15/10/2026).
+  Hủy vé chỉ đổi status = CANCELLED +
+  cancelled_at + cancel_reason.
+  Đã BỎ 2 cột: applied_refund_percent, refund_amount.
+  Khách muốn hoàn tiền → liên hệ đại lý
+  (email + số điện thoại trên website).
+end note
+
+note bottom of BookingService
+  Đặt vé (mục 5.3 DB v0.5):
+  giá dòng vé → khuyến mãi (theo dòng) →
+  voucher (theo booking) → cộng phụ thu ghế + hành lý.
+  Em bé (INFANT) không được giảm.
+  Đặt vé tạo booking ở PENDING_PAYMENT,
+  giữ ghế 15 phút (payment_expires_at).
+end note
+
+note bottom of BookingService
+  getSelf PHẢI kiểm tra booking.user_id
+  = user trong token (chống truy cập chéo).
+end note
+
+note bottom of PricingService
+  child-fare-percent = 75, infant-fare-percent = 10
+  (application.yml). Không có bảng riêng.
+end note
+
+note bottom of ETicket
+  PNR lấy từ bookings.booking_code —
+  không có cột pnr_code riêng.
+  UNIQUE (booking_segment_id, passenger_id).
+end note
+
+@enduml
