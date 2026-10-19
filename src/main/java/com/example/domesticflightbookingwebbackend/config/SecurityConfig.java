@@ -16,10 +16,16 @@ import org.springframework.security.web.SecurityFilterChain;
 /**
  * Cấu hình bảo mật: stateless + JWT Bearer.
  *
- * <p>Phân quyền chi tiết theo permission nằm ở {@code @PreAuthorize} từng
- * endpoint (method-level); ở đây chỉ chặn theo nhóm path.
- * Endpoint công khai (mục 1.5 API Design v0.2): auth (register/login/reset) +
- * GET dữ liệu công khai (airline, city, airport, promotion, news, news category).
+ * <p>Phân vùng path (mục 1.1b API v0.4):
+ * <ul>
+ *   <li>{@code /api/public/**} — khách đọc, không token, CHỈ GET.</li>
+ *   <li>{@code /api/admin/**} — quản trị, phải đăng nhập; quyền chi tiết do
+ *       {@code @PreAuthorize} từng endpoint quyết.</li>
+ *   <li>{@code /api/auth/**} — đăng ký/đăng nhập/quên mật khẩu công khai.</li>
+ *   <li>Self-service ({@code /api/profile}, {@code /api/my-vouchers}…) — đăng nhập.</li>
+ * </ul>
+ *
+ * <p>Mọi path cũ {@code /api/v1/**} đã bị bỏ — request vào đó rơi về 401.
  */
 @Configuration
 @EnableMethodSecurity
@@ -47,22 +53,16 @@ public class SecurityConfig {
                         // Tài liệu API + health
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 
+                        // Vùng khách: CHỈ GET, không cần token. Đặt TRƯỚC /admin để
+                        // không bao giờ lọt xuống nhánh authenticated.
+                        .requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()
+
                         // Auth công khai: đăng ký, đăng nhập, quên/đặt lại mật khẩu.
                         // Logout + change-password yêu cầu token nên khai báo riêng TRƯỚC.
-                        .requestMatchers("/api/v1/auth/logout", "/api/v1/auth/change-password").authenticated()
-                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/api/auth/logout", "/api/auth/change-password").authenticated()
+                        .requestMatchers("/api/auth/**").permitAll()
 
-                        // GET dữ liệu công khai (guest xem được)
-                        .requestMatchers(HttpMethod.GET,
-                                "/api/v1/airlines/**",
-                                "/api/v1/cities/**",
-                                "/api/v1/airports/**",
-                                "/api/v1/promotions/**",
-                                "/api/v1/news/**",
-                                "/api/v1/news-categories/**"
-                        ).permitAll()
-
-                        // Còn lại phải đăng nhập; quyền chi tiết do @PreAuthorize lo
+                        // Vùng quản trị + self-service: phải đăng nhập
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt

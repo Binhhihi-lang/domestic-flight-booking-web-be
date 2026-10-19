@@ -769,7 +769,7 @@ NEWS-01 quy định GUEST/CUSTOMER chỉ thấy `status = PUBLISHED`. Việc tá
 
 **ADMIN/STAFF** xem bài `DRAFT` qua `/admin/news/{id}` (không phải qua `/public`) — nên **không cần phân nhánh theo quyền trong cùng một endpoint nữa**. Đây là lợi ích trực tiếp của việc tách path: `/public/news/{id}` có thể **luôn** lọc `PUBLISHED` mà không sợ chặn nhầm admin.
 
-> **Trạng thái code BE (13/10/2026):** `NewsController.getById` kế thừa thẳng `BaseCrudController.getById` → `BaseCrudService.getById` → **không có kiểm tra `status`**. Cần override ở `NewsController`/`NewsService` (hoặc tách controller public/admin) để áp quy tắc trên. FE đã chặn ở client (`news-detail.ts` kiểm tra `status !== 'PUBLISHED'`) nhưng **đó chỉ là lớp chặn giao diện** — dữ liệu vẫn đi qua mạng.
+> **Trạng thái code BE (cập nhật 17/10/2026):** quy tắc nay được áp ở **path**, không phải theo quyền — `NewsService.getPublicById` (dùng ở `GET /api/public/news/{id}`) chặn `status != PUBLISHED` → `1004`; vùng `GET /api/admin/news/{id}` đọc mọi trạng thái. FE vẫn giữ lớp chặn client (`news-detail.ts` kiểm tra `status !== 'PUBLISHED'`) cho UX.
 
 #### `GET /public/news-categories` — danh mục cho khách (mới v0.4)
 
@@ -1035,7 +1035,7 @@ Các endpoint `DELETE` ở Phase 1 nay là **soft delete thật**. Unique của 
 | airlines, cities, airports, aircrafts, seat-types, promotions, vouchers, news-categories, users | `is_active` | `status` | `ACTIVE` \| `INACTIVE` |
 | news_items | `status` | `status` | `DRAFT` \| `PUBLISHED` \| `UNPUBLISHED` |
 
-### 4.9 ⚠️ Lỗ hổng phân quyền phát hiện khi rà code (13/10/2026) — CẦN SỬA
+### 4.9 ⚠️ Lỗ hổng phân quyền phát hiện khi rà code (13/10/2026) — ✅ ĐÃ VÁ 17/10/2026
 
 Hai vấn đề dưới đây **phát hiện từ code backend thực tế** (không chỉ từ tài liệu), cả hai đều nằm ở tầng Spring Security và cần sửa trước khi FE nối API thật. **Việc tách vùng `/admin` và `/public` (mục 1.1b) chính là cách xử lý gốc cho cả hai** — ranh giới nay nằm ở **path prefix**, kiểm tra được ở tầng Spring Security thay vì phụ thuộc logic service.
 
@@ -1050,7 +1050,7 @@ Hai vấn đề dưới đây **phát hiện từ code backend thực tế** (kh
 
 **Kiểm chứng:** `SeatTypeController`, `AirlineController`, `CityController`, `AirportController`, `AircraftController`, `PromotionController`, `VoucherController`, `NewsCategoryController` đều override `toggleActive` kèm `@PreAuthorize`. **Chỉ `NewsController` thiếu.**
 
-> **Việc cần làm khi sửa code BE:** (1) tách `NewsController`/`NewsCategoryController` thành controller public và admin (hoặc dùng path prefix khác nhau); (2) cập nhật `SecurityConfig` — `/api/public/**` = `permitAll` (chỉ GET), `/api/admin/**` = authenticated; (3) đổi `@RequestMapping` của tất cả controller quản trị thêm tiền tố `/admin`; (4) thêm ràng buộc "ADMIN không xóa ADMIN" ở `UserService.delete` (xem mục 2.3).
+> **Trạng thái triển khai (17/10/2026 — cụm 9 + 11):** đã hoàn thành cả 4 việc — (1) 6 controller public mới (`AirlinePublicController`, `CityPublicController`, `AirportPublicController`, `PromotionPublicController`, `NewsPublicController`, `NewsCategoryPublicController`); (2) `SecurityConfig` viết lại: `/api/public/**` = `permitAll` **chỉ GET**, `/api/admin/**` = authenticated; (3) mọi controller quản trị đã đổi `@RequestMapping` sang `/api/admin/**`, bỏ `/v1`; (4) `UserService.delete` chặn xóa **mọi** tài khoản ADMIN → 1006. Ngoài ra `NewsController` đã override `toggleActive` với `@PreAuthorize('NEWS_UPDATE')` và `NewsService.setActive` gán `published_at` khi bật lần đầu.
 
 ---
 

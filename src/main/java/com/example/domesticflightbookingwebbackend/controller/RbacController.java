@@ -19,7 +19,7 @@ import java.util.List;
  * quyền `ROLE_READ` — Permission Matrix v2.0 không có key PERMISSION_READ riêng.
  */
 @RestController
-@RequestMapping("/api/v1")
+@RequestMapping("/api/admin")
 @RequiredArgsConstructor
 public class RbacController {
 

@@ -1,11 +1,13 @@
 package com.example.domesticflightbookingwebbackend.service;
 
 import com.example.domesticflightbookingwebbackend.common.ListQuery;
+import com.example.domesticflightbookingwebbackend.common.PageData;
 import com.example.domesticflightbookingwebbackend.common.PageMapper;
 import com.example.domesticflightbookingwebbackend.dto.request.masterdata.AirlineRequest;
 import com.example.domesticflightbookingwebbackend.dto.response.masterdata.AirlineResponse;
 import com.example.domesticflightbookingwebbackend.entity.Airline;
 import com.example.domesticflightbookingwebbackend.exception.DuplicateResourceException;
+import com.example.domesticflightbookingwebbackend.exception.ResourceNotFoundException;
 import com.example.domesticflightbookingwebbackend.mapper.AirlineMapper;
 import com.example.domesticflightbookingwebbackend.repository.AirlineRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -14,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -87,6 +90,29 @@ public class AirlineService extends BaseCrudService<Airline, Long, AirlineReques
     protected Page<Airline> search(ListQuery query, Map<String, String> filters) {
         Pageable pageable = PageMapper.toPageable(query, "airlineCode", SORT_WHITELIST);
         return airlineRepository.findAll(buildSpec(query, filters), pageable);
+    }
+
+    /** Vùng khách: chỉ trả hãng đang hoạt động (mục 2.11 API v0.4). */
+    @Transactional(readOnly = true)
+    public PageData<AirlineResponse> listPublic(ListQuery query, String country) {
+        Pageable pageable = PageMapper.toPageable(query, "airlineCode", SORT_WHITELIST);
+        Specification<Airline> spec = buildSpec(query, filtersOf(country))
+                .and((root, cq, cb) -> cb.isTrue(root.get("isActive")));
+        return PageMapper.toPageData(airlineRepository.findAll(spec, pageable), this::toResponse);
+    }
+
+    /** Chi tiết cho khách: hãng đã tắt/xóa coi như không tồn tại. */
+    @Transactional(readOnly = true)
+    public AirlineResponse getPublicById(Long id) {
+        Airline airline = findOrThrow(id);
+        if (!Boolean.TRUE.equals(airline.getIsActive())) {
+            throw new ResourceNotFoundException(resourceName() + " không tồn tại");
+        }
+        return toResponse(airline);
+    }
+
+    private Map<String, String> filtersOf(String country) {
+        return country == null || country.isBlank() ? Map.of() : Map.of("country", country);
     }
 
     private Specification<Airline> buildSpec(ListQuery query, Map<String, String> filters) {

@@ -3,12 +3,15 @@ package com.example.domesticflightbookingwebbackend.controller;
 import com.example.domesticflightbookingwebbackend.common.ApiResponse;
 import com.example.domesticflightbookingwebbackend.common.ListQuery;
 import com.example.domesticflightbookingwebbackend.common.PageData;
+import com.example.domesticflightbookingwebbackend.dto.request.common.BulkRequest;
+import com.example.domesticflightbookingwebbackend.dto.response.common.BulkResult;
 import com.example.domesticflightbookingwebbackend.service.BaseCrudService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -16,11 +19,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
- * Lớp REST chung cho các module master data — 5 endpoint theo cùng khuôn
- * (mục 2.5 — API Design v0.2):
+ * Lớp REST chung cho các module quản trị — 6 endpoint theo cùng khuôn
+ * (mục 2.5 — API Design v0.4):
  *
  * <pre>
  *   GET    /            danh sách (phân trang, lọc, sắp xếp)
@@ -29,11 +33,14 @@ import java.util.Map;
  *   PUT    /{id}        cập nhật
  *   PUT    /{id}/active toggle is_active
  *   DELETE /{id}        xóa mềm          → 200, data: null
+ *   PATCH  /bulk        bật/tắt nhiều bản ghi (kết quả từng phần)
+ *   DELETE /bulk        xóa mềm nhiều bản ghi (kết quả từng phần)
  * </pre>
  *
- * <p>Module con khai {@code @RequestMapping("/api/v1/<resource>")} và tiêm
+ * <p>Module con khai {@code @RequestMapping("/api/admin/<resource>")} và tiêm
  * service tương ứng. Phân quyền bằng {@code @PreAuthorize} đặt ở method của
- * lớp con (mỗi module một permission prefix khác nhau).
+ * lớp con (mỗi module một permission prefix khác nhau) — kể cả 2 method bulk,
+ * vì base không gắn annotation quyền.
  */
 public abstract class BaseCrudController<T, ID, Req, Resp> {
 
@@ -92,5 +99,32 @@ public abstract class BaseCrudController<T, ID, Req, Resp> {
     public ApiResponse<Void> delete(@PathVariable ID id) {
         service.delete(id);
         return ApiResponse.success(null);
+    }
+
+    // ================== Thao tác hàng loạt (mục 2.10 API v0.4) ==================
+
+    /** Bật/tắt trạng thái nhiều bản ghi; trả kết quả từng phần. */
+    @PatchMapping("/bulk")
+    public ApiResponse<BulkResult> bulkToggle(@Valid @RequestBody BulkRequest request) {
+        BulkResult result = service.bulkToggle(toIds(request.ids()), request.status());
+        return ApiResponse.success(bulkMessage("cập nhật", result), result);
+    }
+
+    /** Xóa mềm nhiều bản ghi; trả kết quả từng phần. */
+    @DeleteMapping("/bulk")
+    public ApiResponse<BulkResult> bulkDelete(@Valid @RequestBody BulkRequest request) {
+        BulkResult result = service.bulkDelete(toIds(request.ids()));
+        return ApiResponse.success(bulkMessage("xóa", result), result);
+    }
+
+    /** Mọi module hiện dùng khóa chính Long; ép kiểu để giữ base generic. */
+    @SuppressWarnings("unchecked")
+    private List<ID> toIds(List<Long> ids) {
+        return (List<ID>) (List<?>) ids;
+    }
+
+    private String bulkMessage(String action, BulkResult result) {
+        int total = result.succeeded().size() + result.failed().size();
+        return "Đã " + action + " " + result.succeeded().size() + "/" + total + " bản ghi";
     }
 }

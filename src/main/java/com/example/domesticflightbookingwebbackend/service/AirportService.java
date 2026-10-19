@@ -1,6 +1,7 @@
 package com.example.domesticflightbookingwebbackend.service;
 
 import com.example.domesticflightbookingwebbackend.common.ListQuery;
+import com.example.domesticflightbookingwebbackend.common.PageData;
 import com.example.domesticflightbookingwebbackend.common.PageMapper;
 import com.example.domesticflightbookingwebbackend.dto.request.masterdata.AirportRequest;
 import com.example.domesticflightbookingwebbackend.dto.response.masterdata.AirportResponse;
@@ -17,6 +18,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -101,6 +103,27 @@ public class AirportService extends BaseCrudService<Airport, Long, AirportReques
     protected Page<Airport> search(ListQuery query, Map<String, String> filters) {
         Pageable pageable = PageMapper.toPageable(query, "airportCode", SORT_WHITELIST);
         return airportRepository.findAll(buildSpec(query, filters), pageable);
+    }
+
+    /** Vùng khách: chỉ trả sân bay đang hoạt động (mục 2.11 API v0.4). */
+    @Transactional(readOnly = true)
+    public PageData<AirportResponse> listPublic(ListQuery query, String cityId) {
+        Pageable pageable = PageMapper.toPageable(query, "airportCode", SORT_WHITELIST);
+        Map<String, String> filters = cityId == null || cityId.isBlank()
+                ? Map.of() : Map.of("city_id", cityId);
+        Specification<Airport> spec = buildSpec(query, filters)
+                .and((root, cq, cb) -> cb.isTrue(root.get("isActive")));
+        return PageMapper.toPageData(airportRepository.findAll(spec, pageable), this::toResponse);
+    }
+
+    /** Chi tiết cho khách: sân bay đã tắt/xóa coi như không tồn tại. */
+    @Transactional(readOnly = true)
+    public AirportResponse getPublicById(Long id) {
+        Airport airport = findOrThrow(id);
+        if (!Boolean.TRUE.equals(airport.getIsActive())) {
+            throw new ResourceNotFoundException(resourceName() + " không tồn tại");
+        }
+        return toResponse(airport);
     }
 
     private Specification<Airport> buildSpec(ListQuery query, Map<String, String> filters) {

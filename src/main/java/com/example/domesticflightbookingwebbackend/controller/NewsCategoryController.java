@@ -1,6 +1,8 @@
 package com.example.domesticflightbookingwebbackend.controller;
 
 import com.example.domesticflightbookingwebbackend.common.ApiResponse;
+import com.example.domesticflightbookingwebbackend.dto.request.common.BulkRequest;
+import com.example.domesticflightbookingwebbackend.dto.response.common.BulkResult;
 import com.example.domesticflightbookingwebbackend.common.ListQuery;
 import com.example.domesticflightbookingwebbackend.common.PageData;
 import com.example.domesticflightbookingwebbackend.dto.request.news.NewsCategoryRequest;
@@ -12,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -20,9 +23,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** NewsCategory — KHÔNG public, cần NEWS_CATEGORY_* (mục 2.9 API v0.2). */
+/** NewsCategory — quản trị (mục 2.9 API v0.4). Khách xem ở {@code /api/public/news-categories}. */
 @RestController
-@RequestMapping("/api/v1/news-categories")
+@RequestMapping("/api/admin/news-categories")
 public class NewsCategoryController
         extends BaseCrudController<NewsCategory, Long, NewsCategoryRequest, NewsCategoryResponse> {
 
@@ -71,5 +74,19 @@ public class NewsCategoryController
     @PreAuthorize("hasAuthority('NEWS_CATEGORY_DELETE')")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         return super.delete(id);
+    }
+
+    @Override
+    @PatchMapping("/bulk")
+    @PreAuthorize("hasAuthority('NEWS_CATEGORY_UPDATE')")
+    public ApiResponse<BulkResult> bulkToggle(@Valid @RequestBody BulkRequest request) {
+        return super.bulkToggle(request);
+    }
+
+    @Override
+    @DeleteMapping("/bulk")
+    @PreAuthorize("hasAuthority('NEWS_CATEGORY_DELETE')")
+    public ApiResponse<BulkResult> bulkDelete(@Valid @RequestBody BulkRequest request) {
+        return super.bulkDelete(request);
     }
 }

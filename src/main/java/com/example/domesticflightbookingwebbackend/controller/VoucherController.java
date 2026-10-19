@@ -1,6 +1,8 @@
 package com.example.domesticflightbookingwebbackend.controller;
 
 import com.example.domesticflightbookingwebbackend.common.ApiResponse;
+import com.example.domesticflightbookingwebbackend.dto.request.common.BulkRequest;
+import com.example.domesticflightbookingwebbackend.dto.response.common.BulkResult;
 import com.example.domesticflightbookingwebbackend.common.ListQuery;
 import com.example.domesticflightbookingwebbackend.common.PageData;
 import com.example.domesticflightbookingwebbackend.dto.request.voucher.VoucherRequest;
@@ -12,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -25,7 +28,7 @@ import java.util.Map;
 
 /** Voucher — quản lý định nghĩa (ADMIN) + tặng voucher (mục 2.8 API v0.2). */
 @RestController
-@RequestMapping("/api/v1/vouchers")
+@RequestMapping("/api/admin/vouchers")
 public class VoucherController extends BaseCrudController<Voucher, Long, VoucherRequest, VoucherResponse> {
 
     private final VoucherService voucherService;
@@ -94,5 +97,19 @@ public class VoucherController extends BaseCrudController<Voucher, Long, Voucher
 
     /** Body của POST /vouchers/{id}/assign. */
     public record AssignRequest(List<Long> userIds) {
+    }
+
+    @Override
+    @PatchMapping("/bulk")
+    @PreAuthorize("hasAuthority('VOUCHER_UPDATE')")
+    public ApiResponse<BulkResult> bulkToggle(@Valid @RequestBody BulkRequest request) {
+        return super.bulkToggle(request);
+    }
+
+    @Override
+    @DeleteMapping("/bulk")
+    @PreAuthorize("hasAuthority('VOUCHER_DELETE')")
+    public ApiResponse<BulkResult> bulkDelete(@Valid @RequestBody BulkRequest request) {
+        return super.bulkDelete(request);
     }
 }

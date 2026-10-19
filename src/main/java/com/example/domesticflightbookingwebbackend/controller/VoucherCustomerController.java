@@ -26,7 +26,7 @@ import java.util.Map;
  * Mọi endpoint SELF lấy user từ token, KHÔNG nhận user_id từ client.
  */
 @RestController
-@RequestMapping("/api/v1")
+@RequestMapping("/api")
 @RequiredArgsConstructor
 public class VoucherCustomerController {
 

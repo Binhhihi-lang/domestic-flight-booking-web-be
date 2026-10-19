@@ -86,7 +86,7 @@ class GlobalExceptionHandlerTest {
         // Spring 6 ném NoResourceFoundException khi path không khớp handler nào —
         // phải map thành 1004, không được để rơi vào handler Exception chung (9999).
         NoResourceFoundException ex = new NoResourceFoundException(
-                org.springframework.http.HttpMethod.GET, "api/v1/khong-ton-tai", "/api/v1/khong-ton-tai");
+                org.springframework.http.HttpMethod.GET, "api/khong-ton-tai", "/api/khong-ton-tai");
 
         ResponseEntity<ApiResponse<Void>> response = handler.handleNoHandler(ex);
 

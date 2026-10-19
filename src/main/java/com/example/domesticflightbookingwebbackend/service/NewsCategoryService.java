@@ -105,6 +105,25 @@ public class NewsCategoryService extends BaseCrudService<NewsCategory, Long, New
         return categoryRepository.findAll(buildSpec(query), pageable);
     }
 
+    /**
+     * Danh mục cho khách: trả mảng trần, chỉ id + name, chỉ đang hoạt động
+     * (mục 2.9 API v0.4). Không lộ description/status.
+     */
+    @Transactional(readOnly = true)
+    public List<NewsCategoryBrief> listPublic() {
+        return categoryRepository.findAll(
+                        (root, cq, cb) -> cb.and(
+                                cb.isFalse(root.get("isDeleted")),
+                                cb.isTrue(root.get("isActive"))))
+                .stream()
+                .map(c -> new NewsCategoryBrief(c.getId(), c.getName()))
+                .toList();
+    }
+
+    /** Dòng danh mục rút gọn cho vùng /public/news-categories. */
+    public record NewsCategoryBrief(Long id, String name) {
+    }
+
     private Specification<NewsCategory> buildSpec(ListQuery query) {
         return (root, cq, cb) -> {
             List<Predicate> predicates = new ArrayList<>();

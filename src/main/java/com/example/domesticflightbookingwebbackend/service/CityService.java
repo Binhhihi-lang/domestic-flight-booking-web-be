@@ -1,11 +1,13 @@
 package com.example.domesticflightbookingwebbackend.service;
 
 import com.example.domesticflightbookingwebbackend.common.ListQuery;
+import com.example.domesticflightbookingwebbackend.common.PageData;
 import com.example.domesticflightbookingwebbackend.common.PageMapper;
 import com.example.domesticflightbookingwebbackend.dto.request.masterdata.CityRequest;
 import com.example.domesticflightbookingwebbackend.dto.response.masterdata.CityResponse;
 import com.example.domesticflightbookingwebbackend.entity.City;
 import com.example.domesticflightbookingwebbackend.exception.DuplicateResourceException;
+import com.example.domesticflightbookingwebbackend.exception.ResourceNotFoundException;
 import com.example.domesticflightbookingwebbackend.mapper.CityMapper;
 import com.example.domesticflightbookingwebbackend.repository.CityRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -14,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -87,6 +90,27 @@ public class CityService extends BaseCrudService<City, Long, CityRequest, CityRe
     protected Page<City> search(ListQuery query, Map<String, String> filters) {
         Pageable pageable = PageMapper.toPageable(query, "cityCode", SORT_WHITELIST);
         return cityRepository.findAll(buildSpec(query, filters), pageable);
+    }
+
+    /** Vùng khách: chỉ trả thành phố đang hoạt động (mục 2.11 API v0.4). */
+    @Transactional(readOnly = true)
+    public PageData<CityResponse> listPublic(ListQuery query, String country) {
+        Pageable pageable = PageMapper.toPageable(query, "cityCode", SORT_WHITELIST);
+        Map<String, String> filters = country == null || country.isBlank()
+                ? Map.of() : Map.of("country", country);
+        Specification<City> spec = buildSpec(query, filters)
+                .and((root, cq, cb) -> cb.isTrue(root.get("isActive")));
+        return PageMapper.toPageData(cityRepository.findAll(spec, pageable), this::toResponse);
+    }
+
+    /** Chi tiết cho khách: thành phố đã tắt/xóa coi như không tồn tại. */
+    @Transactional(readOnly = true)
+    public CityResponse getPublicById(Long id) {
+        City city = findOrThrow(id);
+        if (!Boolean.TRUE.equals(city.getIsActive())) {
+            throw new ResourceNotFoundException(resourceName() + " không tồn tại");
+        }
+        return toResponse(city);
     }
 
     private Specification<City> buildSpec(ListQuery query, Map<String, String> filters) {

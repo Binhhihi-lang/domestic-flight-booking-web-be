@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** User Management cho ADMIN (mục 2.3 API v0.2). */
 @RestController
-@RequestMapping("/api/v1/users")
+@RequestMapping("/api/admin/users")
 @RequiredArgsConstructor
 public class UserController {
 
@@ -66,7 +66,7 @@ public class UserController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('USER_DELETE')")
     public ApiResponse<Void> delete(@PathVariable Long id) {
-        userService.delete(id, SecurityUtils.getCurrentUserId());
+        userService.delete(id);
         return ApiResponse.success("Đã vô hiệu hóa người dùng", null);
     }
 

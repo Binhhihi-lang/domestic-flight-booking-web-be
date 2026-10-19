@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Authentication & Account (mục 2.1 — API Design v0.2). */
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 

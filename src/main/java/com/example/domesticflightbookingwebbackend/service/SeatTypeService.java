@@ -74,7 +74,16 @@ public class SeatTypeService extends BaseCrudService<SeatType, Long, SeatTypeReq
     private void applyRequest(SeatType seatType, SeatTypeRequest request) {
         seatType.setSeatTypeName(request.seatTypeName().trim());
         seatType.setSeatClass(SeatClass.valueOf(request.seatClass().toUpperCase()));
+        seatType.setColorHex(normalizeColor(request.colorHex()));
         seatType.setIsActive(!"INACTIVE".equalsIgnoreCase(request.status()));
+    }
+
+    /** Chuỗi trắng → null (bỏ đặt màu); hex chuẩn hoá về chữ HOA cho dễ so sánh. */
+    private static String normalizeColor(String colorHex) {
+        if (colorHex == null || colorHex.isBlank()) {
+            return null;
+        }
+        return colorHex.trim().toUpperCase();
     }
 
     /** Loại ghế đang được sơ đồ máy bay dùng → từ chối xóa mềm (chỉ cho tắt is_active). */

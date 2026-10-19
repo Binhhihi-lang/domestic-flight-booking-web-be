@@ -10,7 +10,6 @@ import com.example.domesticflightbookingwebbackend.dto.response.auth.LoginRespon
 import com.example.domesticflightbookingwebbackend.dto.response.auth.UserResponse;
 import com.example.domesticflightbookingwebbackend.entity.Role;
 import com.example.domesticflightbookingwebbackend.entity.User;
-import com.example.domesticflightbookingwebbackend.entity.Wallet;
 import com.example.domesticflightbookingwebbackend.entity.redis.InvalidatedToken;
 import com.example.domesticflightbookingwebbackend.entity.redis.PasswordResetToken;
 import com.example.domesticflightbookingwebbackend.entity.redis.RefreshToken;
@@ -21,7 +20,6 @@ import com.example.domesticflightbookingwebbackend.exception.ErrorCode;
 import com.example.domesticflightbookingwebbackend.mapper.UserMapper;
 import com.example.domesticflightbookingwebbackend.repository.RoleRepository;
 import com.example.domesticflightbookingwebbackend.repository.UserRepository;
-import com.example.domesticflightbookingwebbackend.repository.WalletRepository;
 import com.example.domesticflightbookingwebbackend.repository.redis.InvalidatedTokenRepository;
 import com.example.domesticflightbookingwebbackend.repository.redis.PasswordResetTokenRepository;
 import com.example.domesticflightbookingwebbackend.repository.redis.RefreshTokenRepository;
@@ -51,7 +49,6 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
-    private final WalletRepository walletRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final UserMapper userMapper;
@@ -82,12 +79,6 @@ public class AuthService {
         user.setIsDeleted(false);
         userRepository.save(user);
 
-        // DB v0.4 A.1: đăng ký CUSTOMER thì tạo luôn ví số dư 0
-        Wallet wallet = new Wallet();
-        wallet.setUser(user);
-        wallet.setBalance(BigDecimal.ZERO);
-        walletRepository.save(wallet);
-
         return userMapper.toResponse(user);
     }
 
@@ -102,6 +93,7 @@ public class AuthService {
         if (user == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
         }
+
         if (!Boolean.TRUE.equals(user.getIsActive())) {
             throw new AppException(ErrorCode.ACCOUNT_INACTIVE);
         }
@@ -233,6 +225,7 @@ public class AuthService {
                 .build());
         return token;
     }
+
 
     @Transactional
     public void confirmPasswordReset(PasswordResetConfirmRequest request) {

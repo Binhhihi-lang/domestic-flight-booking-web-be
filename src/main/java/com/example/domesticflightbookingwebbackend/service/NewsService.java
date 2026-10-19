@@ -2,6 +2,7 @@ package com.example.domesticflightbookingwebbackend.service;
 
 import com.example.domesticflightbookingwebbackend.common.HtmlSanitizer;
 import com.example.domesticflightbookingwebbackend.common.ListQuery;
+import com.example.domesticflightbookingwebbackend.common.PageData;
 import com.example.domesticflightbookingwebbackend.common.PageMapper;
 import com.example.domesticflightbookingwebbackend.dto.request.news.NewsRequest;
 import com.example.domesticflightbookingwebbackend.dto.response.news.NewsResponse;
@@ -10,6 +11,8 @@ import com.example.domesticflightbookingwebbackend.entity.NewsCategoryMapping;
 import com.example.domesticflightbookingwebbackend.entity.NewsItem;
 import com.example.domesticflightbookingwebbackend.entity.NewsStatus;
 import com.example.domesticflightbookingwebbackend.exception.BusinessException;
+import com.example.domesticflightbookingwebbackend.exception.AppException;
+import com.example.domesticflightbookingwebbackend.exception.ErrorCode;
 import com.example.domesticflightbookingwebbackend.exception.ResourceNotFoundException;
 import com.example.domesticflightbookingwebbackend.repository.NewsCategoryMappingRepository;
 import com.example.domesticflightbookingwebbackend.repository.NewsCategoryRepository;
@@ -24,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -95,6 +99,34 @@ public class NewsService extends BaseCrudService<NewsItem, Long, NewsRequest, Ne
         return toResponseWithCategories(item);
     }
 
+    /**
+     * Chi tiết cho khách: chỉ trả bài PUBLISHED. Bài DRAFT/UNPUBLISHED trả 1004
+     * (không phải 1003) để không xác nhận id tồn tại — mục 4.9-A API v0.4.
+     * Admin đọc bản nháp qua {@link #getById} ở vùng /admin.
+     */
+    @Transactional(readOnly = true)
+    public NewsResponse getPublicById(Long id) {
+        NewsItem item = findOrThrow(id);
+        if (item.getStatus() != NewsStatus.PUBLISHED) {
+            log.warn("Chặn đọc bài viết id={} ở trạng thái {}", id, item.getStatus());
+            throw new ResourceNotFoundException(resourceName() + " không tồn tại");
+        }
+        return toResponseWithCategories(item);
+    }
+
+    /** Bulk cho News: nhận PUBLISHED | UNPUBLISHED (không nhận DRAFT — về nháp là unpublish). */
+    @Override
+    protected void applyBulkStatus(Long id, String status) {
+        if ("PUBLISHED".equalsIgnoreCase(status)) {
+            publish(id);
+        } else if ("UNPUBLISHED".equalsIgnoreCase(status)) {
+            unpublish(id);
+        } else {
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "Trạng thái chỉ nhận PUBLISHED hoặc UNPUBLISHED");
+        }
+    }
+
     /** Publish: gán PUBLISHED + published_at. Phải có ≥1 chuyên mục (BR-NEWS-03). */
     @Transactional
     public NewsResponse publish(Long id) {
@@ -155,8 +187,13 @@ public class NewsService extends BaseCrudService<NewsItem, Long, NewsRequest, Ne
 
     @Override
     protected void setActive(NewsItem entity, boolean active) {
-        // News dùng status (DRAFT/PUBLISHED/UNPUBLISHED), không dùng is_active
+        // News dùng status (DRAFT/PUBLISHED/UNPUBLISHED), không dùng is_active.
+        // Bật lần đầu phải gán published_at, nếu không bài hiện ra với ngày đăng null.
         entity.setStatus(active ? NewsStatus.PUBLISHED : NewsStatus.UNPUBLISHED);
+        if (active && entity.getPublishedAt() == null) {
+            entity.setPublishedAt(LocalDateTime.now());
+        }
+        entity.setUpdatedAt(LocalDateTime.now());
     }
 
     @Override
@@ -165,9 +202,21 @@ public class NewsService extends BaseCrudService<NewsItem, Long, NewsRequest, Ne
         return newsRepository.findAll(buildSpec(query, filters), pageable);
     }
 
+    /** Vùng khách: chỉ bài PUBLISHED, không nhận tham số status (mục 2.11 API v0.4). */
+    @Transactional(readOnly = true)
+    public PageData<NewsResponse> listPublic(ListQuery query, String categoryId) {
+        Pageable pageable = PageMapper.toPageable(query, "publishedAt", SORT_WHITELIST);
+        Map<String, String> filters = new HashMap<>();
+        filters.put("status", NewsStatus.PUBLISHED.name());   // ép cứng, không cho client ghi đè
+        if (categoryId != null && !categoryId.isBlank()) {
+            filters.put("category_id", categoryId);
+        }
+        return PageMapper.toPageData(newsRepository.findAll(buildSpec(query, filters), pageable),
+                this::toResponse);
+    }
+
     /** Khách chỉ thấy PUBLISHED; ADMIN/STAFF truyền status để xem DRAFT (BR-LIST-04). */
-    private Specification<NewsItem> buildSpec(ListQuery query, Map<String, String> filters) {
-        return (root, cq, cb) -> {
+    private Specification<NewsItem> buildSpec(ListQuery query, Map<String, String> filters) {        return (root, cq, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.isFalse(root.get("isDeleted")));   // BR-LIST-04
 

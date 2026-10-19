@@ -60,6 +60,7 @@ class SeatMapServiceTest {
         st.setSeatTypeCode("ECO");
         st.setSeatTypeName("Phổ thông");
         st.setSeatClass(SeatClass.ECONOMY);
+        st.setColorHex("#0194F3");
         st.setIsActive(active);
         st.setIsDeleted(false);
         return st;
@@ -145,6 +146,7 @@ class SeatMapServiceTest {
         assertThat(res.seatCapacity()).isEqualTo(2);
         assertThat(res.seats()).extracting(SeatMapResponse.SeatEntry::seatColumn)
                 .containsExactly("A", "B");   // đã upper-case
+        assertThat(res.seats().get(0).seatType().colorHex()).isEqualTo("#0194F3");
     }
 
     @Test

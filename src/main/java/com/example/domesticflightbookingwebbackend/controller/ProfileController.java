@@ -22,7 +22,7 @@ import java.util.Map;
 
 /** Profile của chính người đang đăng nhập (mục 2.2 API v0.2). */
 @RestController
-@RequestMapping("/api/v1/profile")
+@RequestMapping("/api/profile")
 @RequiredArgsConstructor
 public class ProfileController {
 

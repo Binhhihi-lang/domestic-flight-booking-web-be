@@ -8,7 +8,6 @@ import com.example.domesticflightbookingwebbackend.dto.request.user.UpdateUserRe
 import com.example.domesticflightbookingwebbackend.dto.response.auth.UserResponse;
 import com.example.domesticflightbookingwebbackend.entity.Role;
 import com.example.domesticflightbookingwebbackend.entity.User;
-import com.example.domesticflightbookingwebbackend.entity.Wallet;
 import com.example.domesticflightbookingwebbackend.exception.AppException;
 import com.example.domesticflightbookingwebbackend.exception.BusinessException;
 import com.example.domesticflightbookingwebbackend.exception.DuplicateResourceException;
@@ -17,11 +16,11 @@ import com.example.domesticflightbookingwebbackend.exception.ResourceNotFoundExc
 import com.example.domesticflightbookingwebbackend.mapper.UserMapper;
 import com.example.domesticflightbookingwebbackend.repository.RoleRepository;
 import com.example.domesticflightbookingwebbackend.repository.UserRepository;
-import com.example.domesticflightbookingwebbackend.repository.WalletRepository;
 import com.example.domesticflightbookingwebbackend.repository.redis.RefreshTokenRepository;
 import com.example.domesticflightbookingwebbackend.security.UserDetailsServiceImpl;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -29,13 +28,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 /** User Management cho ADMIN (mục 2.3 API v0.2, USR-01 → USR-05). */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -47,7 +46,6 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
-    private final WalletRepository walletRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
     private final UserDetailsServiceImpl userDetailsService;
@@ -114,11 +112,6 @@ public class UserService {
         user.setIsDeleted(false);
         userRepository.save(user);
 
-        Wallet wallet = new Wallet();
-        wallet.setUser(user);
-        wallet.setBalance(BigDecimal.ZERO);
-        walletRepository.save(wallet);
-
         return userMapper.toResponse(user);
     }
 
@@ -160,13 +153,13 @@ public class UserService {
     // ================== DELETE (soft) ==================
 
     @Transactional
-    public void delete(Long id, Long currentAdminId) {
+    public void delete(Long id) {
         User user = findOrThrow(id);
 
-        boolean losingAdmin = "ADMIN".equals(user.getRole().getName());
-        if (losingAdmin && id.equals(currentAdminId) && countActiveAdmins() <= 1) {
-            throw new BusinessException(
-                    "Không thể xóa: đây là tài khoản ADMIN đang hoạt động cuối cùng");
+        // USR-05 + ràng buộc 14/10: ADMIN không xóa ADMIN (chỉ hạ quyền nếu còn ADMIN khác)
+        if ("ADMIN".equals(user.getRole().getName())) {
+            log.warn("Từ chối xóa tài khoản ADMIN id={}", id);
+            throw new BusinessException("Không thể xóa tài khoản ADMIN");
         }
 
         // USR-05: soft delete — đặt is_active=false + is_deleted=true, giữ lịch sử

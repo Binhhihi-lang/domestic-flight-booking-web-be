@@ -1,6 +1,7 @@
 package com.example.domesticflightbookingwebbackend.service;
 
 import com.example.domesticflightbookingwebbackend.common.ListQuery;
+import com.example.domesticflightbookingwebbackend.common.PageData;
 import com.example.domesticflightbookingwebbackend.common.PageMapper;
 import com.example.domesticflightbookingwebbackend.dto.request.promotion.PromotionRequest;
 import com.example.domesticflightbookingwebbackend.dto.response.promotion.PromotionResponse;
@@ -38,6 +39,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -287,6 +289,43 @@ public class PromotionService extends BaseCrudService<Promotion, Long, Promotion
     protected Page<Promotion> search(ListQuery query, Map<String, String> filters) {
         Pageable pageable = PageMapper.toPageable(query, "startDate", SORT_WHITELIST);
         return promotionRepository.findAll(buildSpec(query, filters), pageable);
+    }
+
+    /**
+     * Vùng khách: chỉ trả khuyến mãi đang hiệu lực (is_active + trong khoảng ngày).
+     * buildSpec mặc định đã lọc đúng khi KHÔNG truyền is_active.
+     */
+    @Transactional(readOnly = true)
+    public PageData<PromotionResponse> listPublic(ListQuery query, String discountType, String tripType) {
+        Pageable pageable = PageMapper.toPageable(query, "startDate", SORT_WHITELIST);
+        return PageMapper.toPageData(
+                promotionRepository.findAll(buildSpec(query, publicFilters(discountType, tripType)), pageable),
+                this::toResponse);
+    }
+
+    /** Chi tiết cho khách: ngoài khoảng hiệu lực hoặc đã tắt → 1004. */
+    @Transactional(readOnly = true)
+    public PromotionResponse getPublicById(Long id) {
+        Promotion promotion = findOrThrow(id);
+        LocalDate today = LocalDate.now();
+        boolean visible = Boolean.TRUE.equals(promotion.getIsActive())
+                && !today.isBefore(promotion.getStartDate())
+                && !today.isAfter(promotion.getEndDate());
+        if (!visible) {
+            throw new ResourceNotFoundException(resourceName() + " không tồn tại");
+        }
+        return toResponse(promotion);
+    }
+
+    private Map<String, String> publicFilters(String discountType, String tripType) {
+        Map<String, String> filters = new HashMap<>();
+        if (discountType != null && !discountType.isBlank()) {
+            filters.put("discount_type", discountType);
+        }
+        if (tripType != null && !tripType.isBlank()) {
+            filters.put("applicable_trip_type", tripType);
+        }
+        return filters;
     }
 
     /**

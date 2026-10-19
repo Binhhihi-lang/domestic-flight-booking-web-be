@@ -65,12 +65,6 @@ public class Booking {
     @Column(name = "cancel_reason", length = 255)
     private String cancelReason;
 
-    @Column(name = "applied_refund_percent", precision = 5, scale = 2)
-    private BigDecimal appliedRefundPercent;
-
-    @Column(name = "refund_amount", precision = 12, scale = 2)
-    private BigDecimal refundAmount;
-
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 

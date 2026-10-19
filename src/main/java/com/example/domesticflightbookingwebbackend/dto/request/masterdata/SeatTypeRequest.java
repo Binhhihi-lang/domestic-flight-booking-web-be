@@ -19,6 +19,10 @@ public record SeatTypeRequest(
         @Pattern(regexp = "ECONOMY|BUSINESS|FIRST", message = "Hạng ghế chỉ nhận ECONOMY, BUSINESS hoặc FIRST")
         String seatClass,
 
+        /** Mã màu #RRGGBB — bỏ trống thì FE tự dùng màu mặc định theo hạng ghế. */
+        @Pattern(regexp = "^#[0-9A-Fa-f]{6}$", message = "Mã màu phải có dạng #RRGGBB")
+        String colorHex,
+
         /** ACTIVE | INACTIVE — không gửi thì mặc định ACTIVE. */
         @Pattern(regexp = "(?i)ACTIVE|INACTIVE", message = "Trạng thái chỉ nhận ACTIVE hoặc INACTIVE")
         String status

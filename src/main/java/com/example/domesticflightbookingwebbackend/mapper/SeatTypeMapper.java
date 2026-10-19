@@ -13,6 +13,7 @@ public class SeatTypeMapper {
                 seatType.getSeatTypeCode(),
                 seatType.getSeatTypeName(),
                 seatType.getSeatClass().name(),
+                seatType.getColorHex(),
                 Boolean.TRUE.equals(seatType.getIsActive()) ? "ACTIVE" : "INACTIVE"
         );
     }

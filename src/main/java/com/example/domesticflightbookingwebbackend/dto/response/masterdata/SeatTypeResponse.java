@@ -6,6 +6,7 @@ public record SeatTypeResponse(
         String seatTypeCode,
         String seatTypeName,
         String seatClass,
+        String colorHex,
         String status
 ) {
 }

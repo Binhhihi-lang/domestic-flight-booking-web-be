@@ -296,6 +296,38 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 
 ---
 
+**Ghi chú Cụm 10 (17/10/2026) — `color_hex` cho loại ghế:**
+- Migration **V12** (`V12__seat_type_color.sql`): thêm `seat_types.color_hex VARCHAR(7) NULL` + CHECK regex `^#[0-9A-Fa-f]{6}$`. Không backfill — `NULL` để FE lùi về màu mặc định theo `seat_class`.
+- Entity `SeatType` + `SeatTypeRequest` (`@Pattern`) + `SeatTypeResponse` + `SeatTypeMapper` + `SeatTypeService.applyRequest` (chuỗi trắng → `null`, hex chuẩn hoá chữ HOA).
+- `SeatMapResponse` tự có `color_hex` vì `SeatEntry` lồng `SeatTypeResponse` sẵn.
+- **Test:** thêm `SeatTypeServiceTest` (5 test) + assert `color_hex` trong `SeatMapServiceTest`.
+- **Verify E2E:** Flyway apply V12 trên Postgres local OK; POST trả `"color_hex":"#0194F3"` (chuẩn hoá từ `#0194f3`); sai định dạng → 1001 field `colorHex`; `GET /aircrafts/1/seat-map` trả `color_hex` trong `seat_type`.
+
+**Ghi chú Cụm 9 (17/10/2026) — vá 4 lỗ hổng bảo mật + bỏ ví:**
+- **9.1** `NewsService.getPublicById` chặn `status != PUBLISHED` → 1004 (không phải 1003, không xác nhận id tồn tại).
+- **9.2** `NewsController` override `toggleActive` với `@PreAuthorize('NEWS_UPDATE')` — trước đó thừa hưởng method base không có annotation.
+- **9.3** `UserService.delete` chặn xóa **mọi** tài khoản ADMIN → 1006; bỏ tham số `currentAdminId` không còn dùng.
+- **9.4** Migration **V13** (`V13__drop_wallet_and_refund.sql`): drop `wallet_transactions` → `wallets`; drop `bookings.applied_refund_percent` + `refund_amount`; xóa quyền `WALLET_READ_SELF`.
+- **9.5** Xóa 3 entity + 2 repository ví; bỏ đoạn tạo ví ở `AuthService.register`, `UserService.create`, `DataInitializer`.
+- **Phát sinh đã sửa:** `NewsService.setActive` nay gán `published_at` khi bật lần đầu.
+- **Test:** thêm `NewsServiceTest` (4) + `UserServiceTest` (3). Tổng **57 test pass**.
+- **Verify E2E:** khách GET bài DRAFT → 1004; CUSTOMER `PUT /news/{id}/active` → 1003; ADMIN xóa ADMIN → 1006, xóa STAFF → 1000; register không còn tạo dòng `wallets`; V13 applied.
+
+**Ghi chú Cụm 11 (17/10/2026) — tách `/admin` `/public` + bỏ `/v1` + bulk:**
+- **Path mới:** auth → `/api/auth`; profile → `/api/profile`; self-service voucher → `/api/voucher-store`, `/api/my-vouchers`, `/api/vouchers/{id}/claim`; quản trị → `/api/admin/*`; khách đọc → `/api/public/*`. Bỏ hoàn toàn `/api/v1`.
+- **6 controller public mới** — chỉ GET, không token, chỉ trả bản ghi đang hoạt động; chi tiết bản ghi đã tắt → 1004. `GET /api/public/news-categories` trả mảng trần `{id, name}`.
+- **Service thêm `listPublic`/`getPublicById`** cho Airline, City, Airport, Promotion, News, NewsCategory.
+- **Chuyển chặn DRAFT từ theo quyền sang theo vùng path** — bỏ `SecurityUtils.hasAuthority` khỏi `NewsService.getById`.
+- **Bulk:** `BulkRequest`/`BulkResult` + `BaseCrudService.bulkToggle/bulkDelete` + endpoint `PATCH|DELETE /api/admin/{resource}/bulk`. Trả kết quả từng phần, tối đa 100 id (vượt → 1001), id không tồn tại → `failed` 1004. Mỗi bản ghi chạy transaction riêng (`TransactionTemplate`) để một bản lỗi không rollback cả lô. News override `applyBulkStatus` nhận `PUBLISHED|UNPUBLISHED`, giữ ràng buộc "≥1 chuyên mục" từng bài.
+- **Quyền:** base KHÔNG gắn `@PreAuthorize` cho 2 endpoint bulk (tránh lặp lỗi 4.9-B); 9 controller con override kèm quyền riêng.
+- **SecurityConfig:** `/api/public/**` permitAll **chỉ GET**; `/api/auth/logout` + `change-password` authenticated; `/api/auth/**` public; còn lại authenticated.
+- **Test:** **57 test pass.**
+- **Verify E2E:** public không token → 1000; admin không token → 1002; CUSTOMER `/api/admin/users` → 1003; path cũ `/api/v1/*` → 1004; bulk publish bài thiếu chuyên mục → `failed` 1006 còn bài hợp lệ vẫn thành công; bulk tắt hãng → biến mất khỏi `/api/public/airlines` nhưng vẫn thấy ở `/api/admin/airlines`.
+- **Chưa làm:** bulk cho module `users` (UserController không kế thừa `BaseCrudController`).
+- **Phối hợp FE:** `frontend/docs/plans/2026-10-17-yeu-cau-chinh-sua-tu-be.md` — breaking change, FE phải đổi path đồng thời.
+
+---
+
 ## 6. Bảng theo dõi cụm
 
 | Cụm | Nội dung | Phụ thuộc | Trạng thái |
@@ -310,9 +342,9 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 | 7 | Promotion + Voucher + News | 6 | ✅ 13/10/2026 |
 | 8 | Test, hardening, tài liệu | 4–7 | ✅ 13/10/2026 |
 | + | **V10** — ảnh News/City/Promotion + `permissions.module` + 2 quyền mới | 1 | ✅ 12/10/2026 |
-| **10** | **`color_hex` loại ghế (V12)** | 8 | ⬜ **1 · làm trước** |
-| **9** | **Vá 4 lỗ hổng bảo mật + bỏ ví (V13)** | 8, 10 | ⬜ **2 · ưu tiên cao** |
-| **11** | **Tách `/admin` `/public` + bỏ `/v1` + bulk** | 9, 10 | ⬜ **3 · rủi ro cao** |
+| **10** | **`color_hex` loại ghế (V12)** | 8 | ✅ 17/10/2026 |
+| **9** | **Vá 4 lỗ hổng bảo mật + bỏ ví (V13)** | 8, 10 | ✅ 17/10/2026 |
+| **11** | **Tách `/admin` `/public` + bỏ `/v1` + bulk** | 9, 10 | ✅ 17/10/2026 |
 
 **Chi tiết 3 cụm mới ở mục 5b.** Thứ tự cố định **10 → 9 → 11**: Flyway chạy theo số tăng dần nên V12 phải có trước V13.
 
@@ -402,13 +434,15 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 
 ---
 
-## 5b. Các cụm bổ sung (17/10/2026) — CHƯA TRIỂN KHAI
+## 5b. Các cụm bổ sung (17/10/2026) — ✅ ĐÃ TRIỂN KHAI
 
 > **Bối cảnh:** sau Phase 1 phát sinh 3 nhóm việc: (a) đồng bộ tài liệu v0.5/v0.4/v2.1, (b) vá lỗ hổng bảo mật phát hiện khi rà code, (c) thay đổi nghiệp vụ (bỏ ví/hoàn tiền).
 >
 > **Thứ tự đã chốt: Cụm 10 → Cụm 9 → Cụm 11** (số cụm = thứ tự làm). Lý do: Flyway chạy theo số tăng dần nên **V12 (color_hex) phải có trước V13 (drop ví)**. Mỗi cụm commit riêng để dễ rollback.
+>
+> **Trạng thái 17/10/2026: cả 3 cụm đã xong** — chi tiết ở "Ghi chú Cụm 10/9/11" cuối mục 6.
 
-### Cụm 10 — `color_hex` cho loại ghế (rủi ro thấp) — LÀM TRƯỚC
+### Cụm 10 — `color_hex` cho loại ghế (rủi ro thấp)
 
 | # | Việc | File liên quan | Cách làm |
 |---|---|---|---|
@@ -422,7 +456,7 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 
 ---
 
-### Cụm 9 — Vá 4 lỗ hổng bảo mật + bỏ ví (⚠️ ưu tiên cao) — LÀM SAU CỤM 10
+### Cụm 9 — Vá 4 lỗ hổng bảo mật + bỏ ví (⚠️ ưu tiên cao)
 
 | # | Việc | File liên quan | Cách làm |
 |---|---|---|---|
@@ -442,7 +476,7 @@ Mỗi cụm là **một đơn vị commit/push độc lập**, tự chứa, khô
 
 ---
 
-### Cụm 11 — Tách `/admin` `/public` + bỏ `/v1` + bulk (rủi ro CAO) — LÀM CUỐI
+### Cụm 11 — Tách `/admin` `/public` + bỏ `/v1` + bulk (rủi ro CAO)
 
 > Chạm **14 controller + SecurityConfig**. Breaking change toàn bộ API — FE phải đổi đồng thời.
 

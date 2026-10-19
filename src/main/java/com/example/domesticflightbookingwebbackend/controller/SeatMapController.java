@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Sơ đồ ghế của máy bay (mục 2.6 API v0.2) — thao tác theo cả sơ đồ. */
 @RestController
-@RequestMapping("/api/v1/aircrafts/{aircraftId}/seat-map")
+@RequestMapping("/api/admin/aircrafts/{aircraftId}/seat-map")
 @RequiredArgsConstructor
 public class SeatMapController {
 
