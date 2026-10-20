@@ -14,6 +14,7 @@ public class AircraftMapper {
                 aircraft.getModel(),
                 aircraft.getManufacturer(),
                 aircraft.getSeatCapacity(),
+                aircraft.getAisleAfter(),
                 Boolean.TRUE.equals(aircraft.getIsActive()) ? "ACTIVE" : "INACTIVE"
         );
     }

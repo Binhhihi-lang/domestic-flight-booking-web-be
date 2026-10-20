@@ -68,7 +68,16 @@ public class AircraftService extends BaseCrudService<Aircraft, Long, AircraftReq
         aircraft.setModel(request.model().trim());
         aircraft.setManufacturer(request.manufacturer());
         aircraft.setSeatCapacity(request.seatCapacity());
+        aircraft.setAisleAfter(normalizeAisle(request.aisleAfter()));
         aircraft.setIsActive(!"INACTIVE".equalsIgnoreCase(request.status()));
+    }
+
+    /** Chuỗi trắng → null; chuẩn hoá chữ HOA và bỏ khoảng trắng quanh dấu phẩy. */
+    private static String normalizeAisle(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.replaceAll("\\s+", "").toUpperCase();
     }
 
     @Override

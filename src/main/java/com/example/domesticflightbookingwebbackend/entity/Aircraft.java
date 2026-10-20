@@ -27,6 +27,13 @@ public class Aircraft {
     @Column(name = "seat_capacity", nullable = false)
     private Integer seatCapacity;
 
+    /**
+     * Cột mà SAU ĐÓ là lối đi, phân tách bằng dấu phẩy — vd "C" (3-3) hoặc
+     * "C,E" (3-2-2). NULL = cabin không có lối đi giữa.
+     */
+    @Column(name = "aisle_after", length = 20)
+    private String aisleAfter;
+
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 

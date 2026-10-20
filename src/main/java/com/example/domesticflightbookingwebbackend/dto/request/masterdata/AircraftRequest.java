@@ -24,6 +24,14 @@ public record AircraftRequest(
         @Positive(message = "Sức chứa phải lớn hơn 0")
         Integer seatCapacity,
 
+        /**
+         * Cột mà SAU ĐÓ là lối đi, phân tách bằng dấu phẩy — "C" (3-3),
+         * "C,E" (3-2-2). Bỏ trống = cabin không có lối đi giữa.
+         */
+        @Pattern(regexp = "^[A-Z](,[A-Z])*$",
+                message = "Lối đi phải là chữ cái cột viết hoa, cách nhau bằng dấu phẩy (ví dụ C hoặc C,E)")
+        String aisleAfter,
+
         @Pattern(regexp = "(?i)ACTIVE|INACTIVE", message = "Trạng thái chỉ nhận ACTIVE hoặc INACTIVE")
         String status
 ) {
