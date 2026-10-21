@@ -164,6 +164,33 @@ Quy tắc bắt buộc:
 - `date` không kèm múi giờ.
 - Tiền: `number` + `currency`. Không format dấu phân cách ở tầng API.
 
+### 1.8 Trạng thái hoạt động: `is_active` (request) vs `status` (response, bulk)
+
+Ba chỗ dùng ba dạng khác nhau — **không phải lỗi thiết kế**, nhưng dễ nhầm khi
+viết client:
+
+| Ngữ cảnh | Trường | Kiểu | Ví dụ |
+|---|---|---|---|
+| **Request** `POST`/`PUT` của Promotion và Voucher | `is_active` | boolean | `{ "is_active": true }` |
+| **Filter danh sách** `GET /admin/promotions`, `GET /admin/vouchers` | `is_active` | string | `?is_active=true` |
+| **Request** `POST`/`PUT` của master data (airline, city, airport, aircraft, seat type, news category) | `status` | string | `{ "status": "ACTIVE" }` |
+| **Filter danh sách** master data | `status` | string | `?status=ACTIVE` |
+| **Request** bulk (`PATCH /admin/{resource}/bulk`) — mọi module | `status` | string | `{ "ids": [1,2], "status": "INACTIVE" }` |
+| **Response** mọi module | `status` | string | `"status": "ACTIVE"` |
+
+Ghi chú:
+
+- **Promotion/Voucher** giữ `is_active` ở request **và ở filter** vì lịch sử
+  hợp đồng; response vẫn trả `status` như các module khác (`PromotionMapper`,
+  `VoucherMapper`). Client gửi `status` cho hai module này sẽ bị bỏ qua.
+- **News** là module duy nhất dùng bộ trạng thái riêng: `DRAFT | PUBLISHED |
+  UNPUBLISHED`. Bulk của News nhận **`PUBLISHED` / `UNPUBLISHED`**, không nhận
+  `ACTIVE`/`INACTIVE` — gửi sai giá trị thì cả lô vào `failed`.
+- **News publish/unpublish** đi qua endpoint riêng (`POST /admin/news/{id}/publish`,
+  `POST /admin/news/{id}/unpublish`), không đi qua `PUT`.
+- Không module nào trả cờ `is_active` hay `is_deleted` trong response; bản ghi
+  đã xóa mềm bị lọc ở server (BR-LIST-04).
+
 ---
 
 ## 2. Phase 1 — Đặc tả endpoint theo module
