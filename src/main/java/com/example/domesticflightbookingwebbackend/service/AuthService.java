@@ -25,9 +25,12 @@ import com.example.domesticflightbookingwebbackend.repository.redis.PasswordRese
 import com.example.domesticflightbookingwebbackend.repository.redis.RefreshTokenRepository;
 import com.example.domesticflightbookingwebbackend.security.JwtService;
 import com.example.domesticflightbookingwebbackend.security.UserDetailsServiceImpl;
+import com.example.domesticflightbookingwebbackend.service.mail.MailMessage;
+import com.example.domesticflightbookingwebbackend.service.mail.MailService;
 import com.nimbusds.jwt.SignedJWT;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,6 +59,11 @@ public class AuthService {
     private final InvalidatedTokenRepository invalidatedTokenRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final MailService mailService;
+
+    /** Gốc liên kết đặt lại mật khẩu — trang FE nhận token qua query string. */
+    @Value("${app.auth.reset-link-base:http://localhost:4200/forgot-password}")
+    private String resetLinkBase;
 
     // ================== REGISTER ==================
 
@@ -202,36 +210,67 @@ public class AuthService {
     // ================== PASSWORD RESET ==================
 
     /**
-     * Luôn trả token/message trung tính dù email có tồn tại hay không (chống dò
-     * tài khoản). MVP chưa có mail server nên trả token trong response.
+     * Tạo token đặt lại mật khẩu và gửi email. Luôn trả token/message trung tính
+     * dù email có tồn tại hay không (chống dò tài khoản).
+     *
+     * <p>Token vẫn trả về trong response để luồng test được khi chưa có mail
+     * server; đặt {@code app.auth.expose-reset-token=false} ở production.
      */
     @Transactional(readOnly = true)
     public String requestPasswordReset(PasswordResetRequest request) {
         String email = normalizeEmail(request.email());
         User user = userRepository.findByEmailAndIsDeletedFalse(email).orElse(null);
         if (user == null || !Boolean.TRUE.equals(user.getIsActive())) {
+            // Log để chẩn đoán "không nhận được mail" — response vẫn trung tính.
+            log.info("Yêu cầu đặt lại mật khẩu cho email không tồn tại hoặc đã tắt: {}", email);
             return null;
         }
+        log.info("Yêu cầu đặt lại mật khẩu hợp lệ: user id={}, email={}", user.getId(), email);
 
         // Thu hồi token reset cũ trước khi phát token mới
         passwordResetTokenRepository.deleteAll(
                 passwordResetTokenRepository.findByUserId(String.valueOf(user.getId())));
 
         String token = UUID.randomUUID().toString();
+        Instant now = Instant.now();
+        Instant expiresAt = now.plusSeconds(PASSWORD_RESET_TTL_SECONDS);
+
         passwordResetTokenRepository.save(PasswordResetToken.builder()
                 .id(token)
                 .userId(String.valueOf(user.getId()))
+                .email(user.getEmail())
+                .fullName(user.getFullName())
+                .requestedAt(now)
+                .expiresAt(expiresAt)
                 .ttl(PASSWORD_RESET_TTL_SECONDS)
                 .build());
+
+        // Gửi mail hỏng thì KHÔNG làm hỏng request: người dùng vẫn thấy thông báo
+        // trung tính, và có thể yêu cầu lại.
+        try {
+            mailService.sendPasswordReset(new MailMessage(
+                    user.getEmail(), user.getFullName(),
+                    resetLinkBase + "?token=" + token, expiresAt));
+        } catch (RuntimeException e) {
+            log.error("Không gửi được thư đặt lại mật khẩu cho user id={} ({})",
+                    user.getId(), user.getEmail(), e);
+        }
+
         return token;
     }
-
 
     @Transactional
     public void confirmPasswordReset(PasswordResetConfirmRequest request) {
         PasswordResetToken stored = passwordResetTokenRepository.findById(request.token())
                 .orElseThrow(() -> new AppException(ErrorCode.BUSINESS_RULE_VIOLATION,
                         "Token đặt lại mật khẩu không hợp lệ hoặc đã hết hạn"));
+
+        // Redis tự xóa khi hết TTL, nhưng vẫn kiểm tra để không phụ thuộc đồng hồ Redis
+        if (stored.getExpiresAt() != null && stored.getExpiresAt().isBefore(Instant.now())) {
+            passwordResetTokenRepository.deleteById(request.token());
+            throw new AppException(ErrorCode.BUSINESS_RULE_VIOLATION,
+                    "Token đặt lại mật khẩu không hợp lệ hoặc đã hết hạn");
+        }
 
         User user = userRepository.findById(Long.valueOf(stored.getUserId()))
                 .orElseThrow(() -> new AppException(ErrorCode.BUSINESS_RULE_VIOLATION,
@@ -245,6 +284,8 @@ public class AuthService {
         // Đổi mật khẩu → thu hồi mọi phiên đăng nhập cũ
         revokeAllRefreshTokens(user.getId());
         userDetailsService.evictAuthorities(user.getId());
+
+        log.info("Đặt lại mật khẩu thành công cho user id={}", user.getId());
     }
 
     // ================== CHANGE PASSWORD ==================

@@ -13,6 +13,7 @@ import com.example.domesticflightbookingwebbackend.security.SecurityUtils;
 import com.example.domesticflightbookingwebbackend.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -29,6 +30,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+
+    /** Dev/demo: trả token trong response để test được khi chưa có mail server. */
+    @Value("${app.auth.expose-reset-token:true}")
+    private boolean exposeResetToken;
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<UserResponse>> register(@Valid @RequestBody RegisterRequest request) {
@@ -54,15 +59,16 @@ public class AuthController {
     }
 
     /**
-     * Luôn trả 200 message trung tính (chống dò tài khoản). MVP trả token thẳng
-     * trong {@code data} để test được luồng đặt lại mật khẩu.
+     * Luôn trả 200 message trung tính (chống dò tài khoản). Token đặt lại đi
+     * qua email; trường {@code reset_token} trong response chỉ còn khi
+     * {@code app.auth.expose-reset-token=true} (môi trường dev/demo).
      */
     @PostMapping("/password-reset/request")
     public ApiResponse<PasswordResetResponse> requestPasswordReset(
             @Valid @RequestBody PasswordResetRequest request) {
         String token = authService.requestPasswordReset(request);
         return ApiResponse.success("Nếu email tồn tại, hướng dẫn đã được gửi",
-                new PasswordResetResponse(token));
+                new PasswordResetResponse(exposeResetToken ? token : null));
     }
 
     @PostMapping("/password-reset/confirm")

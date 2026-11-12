@@ -11,6 +11,7 @@ import org.springframework.data.redis.core.TimeToLive;
 import org.springframework.data.redis.core.index.Indexed;
 
 import java.io.Serializable;
+import java.time.Instant;
 
 /**
  * Token đặt lại mật khẩu (quên mật khẩu), TTL 15 phút.
@@ -19,7 +20,8 @@ import java.io.Serializable;
  * cần migration, token tự hết hạn. Đánh đổi: Redis restart thì token mất, user
  * bấm "quên mật khẩu" lại — chấp nhận được.
  *
- * <p>Key = token gửi cho user (UUID), value giữ userId.
+ * <p>Key = token gửi cho user (UUID). Các trường còn lại đủ để dựng nội dung
+ * email mà KHÔNG phải truy vấn lại bảng {@code users} lúc gửi.
  */
 @Getter
 @Setter
@@ -34,6 +36,17 @@ public class PasswordResetToken implements Serializable {
 
     @Indexed
     private String userId;
+
+    /** Email nhận thư — chụp lại tại thời điểm yêu cầu. */
+    private String email;
+
+    /** Tên hiển thị để chào trong thư; null thì dùng email. */
+    private String fullName;
+
+    /** Hạn tuyệt đối, dùng để ghi "liên kết hết hạn lúc ..." trong thư. */
+    private Instant expiresAt;
+
+    private Instant requestedAt;
 
     @TimeToLive
     private Long ttl;
