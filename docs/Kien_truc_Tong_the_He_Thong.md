@@ -309,7 +309,7 @@ FE: auth.interceptor bắt lỗi HTTP
    Máy dev
    ├── Frontend   ng serve        → localhost:4200
    ├── Backend    IDE / mvn       → localhost:8080   (profile: local)
-   └── Docker     docker-compose.dev.yml
+   └── Docker     docker-compose.yml  (chỉ bật postgres + redis)
                   ├── Redis    → localhost:6379
                   └── Postgres → localhost:5433  (chỉ để test migration)
 

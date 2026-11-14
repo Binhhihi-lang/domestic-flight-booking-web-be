@@ -159,7 +159,7 @@ Xem mục 6.
 ## 6. Postman collection + Newman (CẦN LÀM)
 
 ### 6.1 Sinh collection
-1. Chạy app: `docker compose -f docker-compose.dev.yml up -d` → `mvn spring-boot:run -Dspring-boot.run.profiles=local`.
+1. Chạy app: `docker compose up -d postgres redis` → `mvn spring-boot:run "-Dspring-boot.run.profiles=local"`.
 2. Vào `http://localhost:8080/swagger-ui.html` → OpenAPI JSON ở `/v3/api-docs`.
 3. Import `/v3/api-docs` vào Postman → có sẵn 87 endpoint.
 

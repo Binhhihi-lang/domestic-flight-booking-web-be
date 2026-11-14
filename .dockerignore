@@ -1,0 +1,13 @@
+# Không đưa vào build context: nặng, chứa bí mật, hoặc không cần cho image.
+target/
+.git/
+.gitignore
+.idea/
+*.iml
+.env
+docs/
+docker-compose*.yml
+Dockerfile
+.dockerignore
+HELP.md
+*.md
