@@ -75,6 +75,7 @@ public class SeatTypeService extends BaseCrudService<SeatType, Long, SeatTypeReq
         seatType.setSeatTypeName(request.seatTypeName().trim());
         seatType.setSeatClass(SeatClass.valueOf(request.seatClass().toUpperCase()));
         seatType.setColorHex(normalizeColor(request.colorHex()));
+        seatType.setSurcharge(request.surcharge() == null ? java.math.BigDecimal.ZERO : request.surcharge());
         seatType.setIsActive(!"INACTIVE".equalsIgnoreCase(request.status()));
     }
 

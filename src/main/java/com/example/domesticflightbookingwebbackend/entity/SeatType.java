@@ -1,5 +1,6 @@
 package com.example.domesticflightbookingwebbackend.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -28,6 +29,10 @@ public class SeatType {
     /** Mã màu #RRGGBB trên sơ đồ ghế; null = FE dùng màu mặc định theo seat_class. */
     @Column(name = "color_hex", length = 7)
     private String colorHex;
+
+    /** Phụ thu chọn ghế mặc định (VND); flight_seats.seat_surcharge có thể ghi đè. */
+    @Column(name = "surcharge", nullable = false, precision = 12, scale = 2)
+    private BigDecimal surcharge = BigDecimal.ZERO;
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;

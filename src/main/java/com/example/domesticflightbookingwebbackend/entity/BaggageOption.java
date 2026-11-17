@@ -16,6 +16,11 @@ public class BaggageOption {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Gói hành lý thuộc đúng một hãng — giá và tên gói khác nhau giữa các hãng. */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "airline_id", nullable = false)
+    private Airline airline;
+
     @Column(name = "name", nullable = false, length = 100)
     private String name;
 

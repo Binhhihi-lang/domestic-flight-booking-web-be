@@ -15,6 +15,11 @@ public class FareClass {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Hạng vé thuộc đúng một hãng — mã hạng vé chỉ duy nhất trong hãng đó. */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "airline_id", nullable = false)
+    private Airline airline;
+
     @Column(name = "fare_class_code", nullable = false, length = 30)
     private String fareClassCode;
 
