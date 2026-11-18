@@ -49,7 +49,8 @@ class SeatTypeServiceTest {
     }
 
     private SeatTypeRequest request(String colorHex) {
-        return new SeatTypeRequest("eco_win", "Phổ thông - cửa sổ", "ECONOMY", colorHex, "ACTIVE");
+        return new SeatTypeRequest(
+                "eco_win", "Phổ thông - cửa sổ", "ECONOMY", colorHex, null, "ACTIVE");
     }
 
     private SeatTypeResponse create(String colorHex) {
@@ -72,6 +73,36 @@ class SeatTypeServiceTest {
     @Test
     void create_khongCoMau_traNull() {
         assertThat(create(null).colorHex()).isNull();
+    }
+
+    @Test
+    void create_khongTruyenPhuThu_macDinh0() {
+        assertThat(create(null).surcharge()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void create_coPhuThu_luuDung() {
+        when(repository.existsBySeatTypeCodeAndIsDeletedFalse("ECO_EXIT")).thenReturn(false);
+        when(repository.save(any(SeatType.class))).thenAnswer(inv -> {
+            SeatType st = inv.getArgument(0);
+            st.setId(1L);
+            return st;
+        });
+
+        SeatTypeResponse res = service.create(new SeatTypeRequest(
+                "eco_exit", "Thoát hiểm", "ECONOMY", "#1E88E5",
+                new java.math.BigDecimal("120000"), "ACTIVE"));
+
+        assertThat(res.surcharge()).isEqualByComparingTo("120000");
+    }
+
+    @Test
+    void phuThuAm_nem1001() {
+        SeatTypeRequest req = new SeatTypeRequest(
+                "eco_exit", "Thoát hiểm", "ECONOMY", null,
+                new java.math.BigDecimal("-1"), "ACTIVE");
+
+        assertThat(validator.validate(req)).hasSize(1);
     }
 
     @Test

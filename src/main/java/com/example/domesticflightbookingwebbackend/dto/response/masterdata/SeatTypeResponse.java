@@ -1,5 +1,7 @@
 package com.example.domesticflightbookingwebbackend.dto.response.masterdata;
 
+import java.math.BigDecimal;
+
 /** SeatType trả về client (mục 2.6 API v0.2). */
 public record SeatTypeResponse(
         Long id,
@@ -7,6 +9,7 @@ public record SeatTypeResponse(
         String seatTypeName,
         String seatClass,
         String colorHex,
+        BigDecimal surcharge,
         String status
 ) {
 }

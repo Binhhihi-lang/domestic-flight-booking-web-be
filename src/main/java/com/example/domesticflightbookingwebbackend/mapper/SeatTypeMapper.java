@@ -14,6 +14,7 @@ public class SeatTypeMapper {
                 seatType.getSeatTypeName(),
                 seatType.getSeatClass().name(),
                 seatType.getColorHex(),
+                seatType.getSurcharge(),
                 Boolean.TRUE.equals(seatType.getIsActive()) ? "ACTIVE" : "INACTIVE"
         );
     }
