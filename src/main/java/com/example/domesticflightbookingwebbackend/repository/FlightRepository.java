@@ -66,4 +66,21 @@ public interface FlightRepository extends JpaRepository<Flight, Long>, JpaSpecif
             @Param("arrivalAirportId") Long arrivalAirportId,
             @Param("startOfDay") LocalDateTime startOfDay,
             @Param("endOfDay") LocalDateTime endOfDay);
+
+    /** Lấy danh sách chuyến bay trong khoảng thời gian (dùng cho Dashboard vận hành của Staff). */
+    @EntityGraph(attributePaths = {
+            "airline", "aircraft",
+            "departureAirport", "departureAirport.city",
+            "arrivalAirport", "arrivalAirport.city"
+    })
+    @Query("""
+            SELECT f FROM Flight f
+            WHERE f.isDeleted = false
+              AND f.scheduledDeparture >= :from
+              AND f.scheduledDeparture < :to
+            ORDER BY f.scheduledDeparture ASC
+            """)
+    List<Flight> findFlightsInWindow(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to);
 }

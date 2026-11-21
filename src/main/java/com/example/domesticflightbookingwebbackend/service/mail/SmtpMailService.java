@@ -75,6 +75,55 @@ public class SmtpMailService implements MailService {
         }
     }
 
+    @Override
+    public void sendBookingConfirmation(
+            String to,
+            String customerName,
+            String bookingCode,
+            String totalAmountFormatted,
+            java.util.List<String> ticketLines) {
+        if (to == null || to.isBlank()) {
+            return;
+        }
+        String ticketBlock = ticketLines == null || ticketLines.isEmpty()
+                ? "(Đang cập nhật)"
+                : String.join("\n", ticketLines);
+        if (!enabled) {
+            log.info("[mail TẮT] Xác nhận đặt vé PNR={} tới {} ({}) — Tổng thanh toán: {} — Vé điện tử:\n{}",
+                    bookingCode, to, customerName, totalAmountFormatted, ticketBlock);
+            return;
+        }
+        SimpleMailMessage mail = new SimpleMailMessage();
+        mail.setFrom(fromAddress);
+        mail.setTo(to);
+        mail.setSubject("[" + appName + "] Xác nhận đặt vé điện tử — Mã đặt chỗ PNR: " + bookingCode);
+        mail.setText("""
+                Xin chào %s,
+
+                Cảm ơn quý khách đã đặt vé máy bay tại %s.
+                Đơn đặt vé của quý khách đã được thanh toán thành công và xuất vé điện tử:
+
+                - Mã đặt chỗ (PNR): %s
+                - Tổng thanh toán: %s
+
+                Danh sách vé điện tử (E-Ticket):
+                %s
+
+                Chúc quý khách có một chuyến bay tốt đẹp!
+                Trân trọng,
+                %s
+                """.formatted(
+                customerName == null || customerName.isBlank() ? "Quý khách" : customerName,
+                appName, bookingCode, totalAmountFormatted, ticketBlock, appName));
+        try {
+            mailSender.send(mail);
+            log.info("Đã gửi email xác nhận vé điện tử PNR={} tới {}", bookingCode, to);
+        } catch (MailException e) {
+            log.warn("Không thể gửi email xác nhận vé điện tử PNR={} tới {}: {}",
+                    bookingCode, to, e.getMessage());
+        }
+    }
+
     private String buildBody(MailMessage message) {
         String greeting = message.fullName() == null || message.fullName().isBlank()
                 ? "Xin chào,"
