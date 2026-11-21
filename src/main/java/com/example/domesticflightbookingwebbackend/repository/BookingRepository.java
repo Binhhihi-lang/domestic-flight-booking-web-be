@@ -27,6 +27,11 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
     /** Tìm các đơn đặt vé đang chờ thanh toán nhưng đã quá hạn 15 phút để job tự động chuyển sang EXPIRED. */
     List<Booking> findByStatusAndPaymentExpiresAtBefore(BookingStatus status, LocalDateTime now);
 
+    /** Tìm các đơn đặt vé đang chờ thanh toán sắp hết hạn (còn <= 5 phút) để phát thông báo BOOKING_PAYMENT_EXPIRING. */
+    @EntityGraph(attributePaths = "user")
+    List<Booking> findByStatusAndPaymentExpiresAtBetween(
+            BookingStatus status, LocalDateTime from, LocalDateTime to);
+
     long countByCreatedAtBetween(LocalDateTime from, LocalDateTime to);
 
     long countByStatusAndCreatedAtBetween(BookingStatus status, LocalDateTime from, LocalDateTime to);

@@ -9,6 +9,7 @@ import com.example.domesticflightbookingwebbackend.entity.ETicketStatus;
 import com.example.domesticflightbookingwebbackend.entity.FareClass;
 import com.example.domesticflightbookingwebbackend.entity.Flight;
 import com.example.domesticflightbookingwebbackend.entity.FlightSeat;
+import com.example.domesticflightbookingwebbackend.entity.NotificationType;
 import com.example.domesticflightbookingwebbackend.entity.Passenger;
 import com.example.domesticflightbookingwebbackend.entity.PassengerType;
 import com.example.domesticflightbookingwebbackend.entity.SeatHold;
@@ -23,8 +24,8 @@ import com.example.domesticflightbookingwebbackend.repository.ETicketRepository;
 import com.example.domesticflightbookingwebbackend.repository.PassengerRepository;
 import com.example.domesticflightbookingwebbackend.repository.SeatHoldRepository;
 import com.example.domesticflightbookingwebbackend.service.mail.MailService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,7 +53,6 @@ import java.util.Map;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ETicketService {
 
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -63,6 +63,27 @@ public class ETicketService {
     private final PassengerRepository passengerRepository;
     private final SeatHoldRepository seatHoldRepository;
     private final MailService mailService;
+    private NotificationService notificationService;
+
+    public ETicketService(
+            ETicketRepository eTicketRepository,
+            BookingRepository bookingRepository,
+            BookingSegmentRepository bookingSegmentRepository,
+            PassengerRepository passengerRepository,
+            SeatHoldRepository seatHoldRepository,
+            MailService mailService) {
+        this.eTicketRepository = eTicketRepository;
+        this.bookingRepository = bookingRepository;
+        this.bookingSegmentRepository = bookingSegmentRepository;
+        this.passengerRepository = passengerRepository;
+        this.seatHoldRepository = seatHoldRepository;
+        this.mailService = mailService;
+    }
+
+    @Autowired(required = false)
+    public void setNotificationService(NotificationService notificationService) {
+        this.notificationService = notificationService;
+    }
 
     /**
      * Phát hành vé điện tử cho toàn bộ hành khách trên tất cả các chặng của một đơn đặt vé đã thanh toán.
@@ -134,6 +155,15 @@ public class ETicketService {
         }
 
         sendConfirmationEmailSafely(booking, emailLines);
+        if (notificationService != null && booking.getUser() != null) {
+            notificationService.notify(
+                    booking.getUser().getId(),
+                    NotificationType.ETICKET_ISSUED,
+                    "Vé điện tử cho đơn " + booking.getBookingCode() + " đã phát hành",
+                    "Đã phát hành " + issued.size() + " vé điện tử cho mã đặt chỗ PNR " + booking.getBookingCode() + ".",
+                    "/account/bookings/" + booking.getId(),
+                    "booking:" + booking.getId() + ":eticket_issued");
+        }
         log.info("Đã phát hành {} vé điện tử cho đơn đặt vé PNR={}", issued.size(), booking.getBookingCode());
         return issued;
     }

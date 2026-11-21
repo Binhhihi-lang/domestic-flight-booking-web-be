@@ -19,4 +19,11 @@ public interface UserVoucherRepository extends JpaRepository<UserVoucher, Long> 
     List<UserVoucher> findByUserIdAndVoucherId(Long userId, Long voucherId);
 
     Optional<UserVoucher> findByBookingId(Long bookingId);
+
+    /** Tìm các voucher trong ví khách đang AVAILABLE và sắp hết hạn trong cửa sổ thời gian (ví dụ 3 ngày tới). */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"user", "voucher"})
+    List<UserVoucher> findByStatusAndExpiresAtBetween(
+            com.example.domesticflightbookingwebbackend.entity.UserVoucherStatus status,
+            java.time.LocalDateTime from,
+            java.time.LocalDateTime to);
 }
