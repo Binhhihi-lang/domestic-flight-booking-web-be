@@ -63,4 +63,18 @@ public interface FlightFareRepository extends JpaRepository<FlightFare, Long>, J
     /** Lấy danh sách giá của một chuyến bay (dùng cho màn chi tiết chuyến bay). */
     @EntityGraph(attributePaths = {"fareClass", "fareClass.airline"})
     List<FlightFare> findByFlightIdOrderByBaseFareAsc(Long flightId);
+
+    /** Lấy dòng giá đang có hiệu lực tại thời điểm {@code now} cho một cặp {@code (flight_id, fare_class_id)}. */
+    @Query("""
+            SELECT ff FROM FlightFare ff
+            WHERE ff.flight.id = :flightId
+              AND ff.fareClass.id = :fareClassId
+              AND ff.effectiveFrom <= :now
+              AND (ff.effectiveTo IS NULL OR ff.effectiveTo > :now)
+            ORDER BY ff.effectiveFrom DESC
+            """)
+    List<FlightFare> findActiveFaresByFlightAndFareClass(
+            @Param("flightId") Long flightId,
+            @Param("fareClassId") Long fareClassId,
+            @Param("now") LocalDateTime now);
 }

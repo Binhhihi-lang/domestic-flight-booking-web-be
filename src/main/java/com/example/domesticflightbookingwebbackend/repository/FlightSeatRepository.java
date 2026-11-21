@@ -28,6 +28,10 @@ public interface FlightSeatRepository extends JpaRepository<FlightSeat, Long> {
     @EntityGraph(attributePaths = {"aircraftSeat", "aircraftSeat.seatType"})
     List<FlightSeat> findByFlightId(Long flightId);
 
+    /** Lấy một ghế chuyến bay kèm chuyến bay, ghế máy bay và loại ghế (dùng khi giữ ghế để kiểm tra khoang). */
+    @EntityGraph(attributePaths = {"flight", "aircraftSeat", "aircraftSeat.seatType"})
+    java.util.Optional<FlightSeat> findWithDetailsById(Long id);
+
     /**
      * Đếm số ghế trống (AVAILABLE) theo chuyến và khoang ({@code seat_class}) cho tập chuyến bay
      * (dùng khi tìm kiếm chuyến bay — 1 câu GROUP BY cho toàn bộ kết quả, không N+1).
