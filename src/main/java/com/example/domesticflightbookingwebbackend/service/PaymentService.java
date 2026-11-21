@@ -61,6 +61,8 @@ public class PaymentService {
     private final SeatHoldService seatHoldService;
     private final ETicketService eTicketService;
     private NotificationService notificationService;
+    private VnpayGatewayService vnpayGatewayService;
+    private PayosGatewayService payosGatewayService;
 
     public PaymentService(
             PaymentRepository paymentRepository,
@@ -78,6 +80,18 @@ public class PaymentService {
     @Autowired(required = false)
     public void setNotificationService(NotificationService notificationService) {
         this.notificationService = notificationService;
+    }
+
+    @Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    public void setVnpayGatewayService(VnpayGatewayService vnpayGatewayService) {
+        this.vnpayGatewayService = vnpayGatewayService;
+    }
+
+    @Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    public void setPayosGatewayService(PayosGatewayService payosGatewayService) {
+        this.payosGatewayService = payosGatewayService;
     }
 
     /**
@@ -290,7 +304,7 @@ public class PaymentService {
 
     private String normalizePaymentMethod(String rawMethod) {
         String upper = rawMethod.trim().toUpperCase();
-        if ("VIETQR".equals(upper)) {
+        if ("VIETQR".equals(upper) || "PAYOS".equals(upper)) {
             return "BANK_TRANSFER";
         }
         return upper;
@@ -300,7 +314,10 @@ public class PaymentService {
         if (requestedGateway != null && !requestedGateway.isBlank()) {
             return requestedGateway.trim().toUpperCase();
         }
-        return "VNPAY".equals(method) ? "VNPAY" : "VIETQR";
+        if ("VNPAY".equals(method)) {
+            return "VNPAY";
+        }
+        return (payosGatewayService != null && payosGatewayService.isConfigured()) ? "PAYOS" : "VIETQR";
     }
 
     private PaymentResponse toResponse(Payment payment) {
@@ -309,21 +326,35 @@ public class PaymentService {
         PaymentResponse.VietQrInfo vietQr = null;
 
         if ("VNPAY".equalsIgnoreCase(payment.getPaymentMethod())) {
-            paymentUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_TxnRef="
-                    + booking.getBookingCode() + "-" + payment.getId()
-                    + "&vnp_Amount=" + payment.getAmount().multiply(BigDecimal.valueOf(100)).longValue();
+            if (vnpayGatewayService != null && vnpayGatewayService.isConfigured()) {
+                paymentUrl = vnpayGatewayService.buildPaymentUrl(payment, "127.0.0.1");
+            } else {
+                paymentUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_TxnRef="
+                        + booking.getBookingCode() + "-" + payment.getId()
+                        + "&vnp_Amount=" + payment.getAmount().multiply(BigDecimal.valueOf(100)).longValue();
+            }
         } else {
-            String transferContent = "VINAFLY " + booking.getBookingCode();
-            String qrUrl = "https://img.vietqr.io/image/" + VIETQR_BANK_ID + "-" + VIETQR_ACCOUNT_NO
-                    + "-compact2.png?amount=" + payment.getAmount().longValue()
-                    + "&addInfo=" + transferContent.replace(" ", "%20");
-            vietQr = new PaymentResponse.VietQrInfo(
-                    VIETQR_BANK_NAME,
-                    VIETQR_ACCOUNT_NO,
-                    VIETQR_ACCOUNT_HOLDER,
-                    payment.getAmount(),
-                    transferContent,
-                    qrUrl);
+            if (payosGatewayService != null
+                    && payosGatewayService.isConfigured()
+                    && payment.getStatus() == PaymentStatus.PENDING) {
+                vietQr = payosGatewayService.createPaymentLink(payment);
+                if (vietQr != null && vietQr.checkoutUrl() != null) {
+                    paymentUrl = vietQr.checkoutUrl();
+                }
+            }
+            if (vietQr == null) {
+                String transferContent = "VINAFLY " + booking.getBookingCode();
+                String qrUrl = "https://img.vietqr.io/image/" + VIETQR_BANK_ID + "-" + VIETQR_ACCOUNT_NO
+                        + "-compact2.png?amount=" + payment.getAmount().longValue()
+                        + "&addInfo=" + transferContent.replace(" ", "%20");
+                vietQr = new PaymentResponse.VietQrInfo(
+                        VIETQR_BANK_NAME,
+                        VIETQR_ACCOUNT_NO,
+                        VIETQR_ACCOUNT_HOLDER,
+                        payment.getAmount(),
+                        transferContent,
+                        qrUrl);
+            }
         }
 
         return new PaymentResponse(

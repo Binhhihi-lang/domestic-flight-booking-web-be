@@ -24,14 +24,25 @@ public record PaymentResponse(
         LocalDateTime createdAt,
         LocalDateTime paidAt
 ) {
-    /** Thông tin chuyển khoản ngân hàng VietQR (chỉ trả khi payment_method = BANK_TRANSFER / VIETQR). */
+    /** Thông tin chuyển khoản ngân hàng VietQR / payOS (chỉ trả khi payment_method = BANK_TRANSFER / VIETQR / PAYOS). */
     public record VietQrInfo(
             String bankName,
             String accountNumber,
             String accountHolder,
             BigDecimal amount,
             String transferContent,
-            String qrImageUrl
+            String qrImageUrl,
+            String qrCodeRaw,
+            String checkoutUrl
     ) {
+        public VietQrInfo(
+                String bankName,
+                String accountNumber,
+                String accountHolder,
+                BigDecimal amount,
+                String transferContent,
+                String qrImageUrl) {
+            this(bankName, accountNumber, accountHolder, amount, transferContent, qrImageUrl, null, null);
+        }
     }
 }

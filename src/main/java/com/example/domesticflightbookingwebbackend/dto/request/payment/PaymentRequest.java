@@ -14,8 +14,8 @@ public record PaymentRequest(
 
         @NotBlank(message = "Phương thức thanh toán không được để trống")
         @Pattern(
-                regexp = "(?i)VNPAY|BANK_TRANSFER|VIETQR",
-                message = "Phương thức thanh toán chỉ nhận VNPAY, BANK_TRANSFER hoặc VIETQR")
+                regexp = "(?i)VNPAY|BANK_TRANSFER|VIETQR|PAYOS",
+                message = "Phương thức thanh toán chỉ nhận VNPAY, BANK_TRANSFER, VIETQR hoặc PAYOS")
         String paymentMethod,
 
         /** Tên cổng thanh toán (tùy chọn, mặc định suy ra từ paymentMethod: VNPAY / VIETQR). */
