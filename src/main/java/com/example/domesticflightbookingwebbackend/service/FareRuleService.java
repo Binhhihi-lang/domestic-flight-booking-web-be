@@ -132,6 +132,15 @@ public class FareRuleService extends BaseCrudService<FareRule, Long, FareRuleReq
         entity.setUpdatedAt(LocalDateTime.now());
     }
 
+    /** Lấy version quy định hoàn vé đang ACTIVE mới nhất của một hạng vé (dùng khi tìm chuyến / đặt vé). */
+    @Transactional(readOnly = true)
+    public FareRule getActiveRule(Long fareClassId) {
+        return fareRuleRepository.findActiveRulesByFareClassId(fareClassId, LocalDateTime.now())
+                .stream()
+                .findFirst()
+                .orElse(null);
+    }
+
     @Override
     protected Page<FareRule> search(ListQuery query, Map<String, String> filters) {
         Pageable pageable = PageMapper.toPageable(query, "effectiveFrom", SORT_WHITELIST);

@@ -10,6 +10,11 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+
 public interface FareRuleRepository extends JpaRepository<FareRule, Long>, JpaSpecificationExecutor<FareRule> {
 
     /**
@@ -23,4 +28,30 @@ public interface FareRuleRepository extends JpaRepository<FareRule, Long>, JpaSp
     @Override
     @EntityGraph(attributePaths = {"fareClass", "fareClass.airline"})
     Page<FareRule> findAll(Specification<FareRule> spec, Pageable pageable);
+
+    /** Lấy quy định hoàn vé đang ACTIVE mới nhất của một hạng vé (version cao nhất, effective_from <= now). */
+    @Query("""
+            SELECT r FROM FareRule r
+            WHERE r.fareClass.id = :fareClassId
+              AND r.isDeleted = false
+              AND r.isActive = true
+              AND r.effectiveFrom <= :now
+            ORDER BY r.version DESC
+            """)
+    List<FareRule> findActiveRulesByFareClassId(
+            @Param("fareClassId") Long fareClassId,
+            @Param("now") LocalDateTime now);
+
+    /** Lấy các quy định hoàn vé đang ACTIVE cho một tập hạng vé (dùng khi search chuyến bay, chống N+1). */
+    @Query("""
+            SELECT r FROM FareRule r
+            WHERE r.fareClass.id IN :fareClassIds
+              AND r.isDeleted = false
+              AND r.isActive = true
+              AND r.effectiveFrom <= :now
+            ORDER BY r.fareClass.id ASC, r.version DESC
+            """)
+    List<FareRule> findActiveRulesByFareClassIds(
+            @Param("fareClassIds") Collection<Long> fareClassIds,
+            @Param("now") LocalDateTime now);
 }

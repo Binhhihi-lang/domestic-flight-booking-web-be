@@ -13,4 +13,7 @@ public interface AircraftSeatRepository extends JpaRepository<AircraftSeat, Long
 
     /** Máy bay đã có ghế nào chưa — dùng để khóa sửa sơ đồ khi đã khai thác. */
     boolean existsByAircraftId(Long aircraftId);
+
+    /** Đếm tổng số ghế đã cấu hình trong sơ đồ của máy bay. */
+    long countByAircraftId(Long aircraftId);
 }

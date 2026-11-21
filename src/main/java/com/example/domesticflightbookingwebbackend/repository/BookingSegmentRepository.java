@@ -7,4 +7,7 @@ public interface BookingSegmentRepository extends JpaRepository<BookingSegment, 
 
     /** Quy định hoàn vé đã được booking nào chốt chưa — chặn sửa/xóa version đó. */
     boolean existsByFareRuleId(Long fareRuleId);
+
+    /** Chuyến bay đã phát sinh đặt chỗ chưa — chặn đổi máy bay hoặc xóa chuyến bay. */
+    boolean existsByFlightId(Long flightId);
 }
