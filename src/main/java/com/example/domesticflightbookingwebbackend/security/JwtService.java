@@ -1,7 +1,5 @@
 package com.example.domesticflightbookingwebbackend.security;
 
-import com.example.domesticflightbookingwebbackend.entity.Permission;
-import com.example.domesticflightbookingwebbackend.entity.Role;
 import com.example.domesticflightbookingwebbackend.entity.User;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -25,17 +23,20 @@ import java.util.UUID;
 /**
  * Tạo và đọc JWT (thuật toán đối xứng HS256 — quyết định ở kế hoạch cụm 3).
  *
- * <p>Access token mang: {@code sub} = user id, {@code email}, {@code permissions}
- * (danh sách permission_key) và {@code roles} — đúng mục 1.5 API Design v0.2.
- * Việc kiểm tra quyền ở backend KHÔNG tin vào claim này mà đọc lại từ
- * {@code CachedAuthorities}/DB, nên khóa role có hiệu lực ngay.
+ * <p><b>Slim JWT:</b> token chỉ mang {@code sub} (user id), {@code jti},
+ * {@code type}, {@code roles}, {@code iat}, {@code exp}.
+ *
+ * <p>KHÔNG nhồi danh sách {@code permissions} (60–70+ chuỗi) hay {@code email}
+ * vào token: backend vốn không tin claim quyền mà đọc lại từ
+ * {@code CachedAuthorities} (Redis → DB) ở {@code CustomJwtAuthenticationConverter},
+ * nên claim đó chỉ làm phình mọi header Authorization và lộ tên quyền nội bộ
+ * khi ai đó decode Base64. FE lấy danh sách quyền từ response đăng nhập /
+ * hồ sơ, không decode token.
  */
 @Slf4j
 @Service
 public class JwtService {
 
-    public static final String CLAIM_EMAIL = "email";
-    public static final String CLAIM_PERMISSIONS = "permissions";
     public static final String CLAIM_ROLES = "roles";
     public static final String CLAIM_TYPE = "type";
     public static final String TYPE_ACCESS = "access";
@@ -78,10 +79,8 @@ public class JwtService {
                 .issueTime(Date.from(issueTime))
                 .expirationTime(Date.from(expiry))
                 .jwtID(UUID.randomUUID().toString())
-                .claim(CLAIM_EMAIL, user.getEmail())
                 .claim(CLAIM_TYPE, type)
-                .claim(CLAIM_ROLES, List.of("ROLE_" + user.getRole().getName()))
-                .claim(CLAIM_PERMISSIONS, extractPermissionKeys(user));
+                .claim(CLAIM_ROLES, List.of("ROLE_" + user.getRole().getName()));
 
         Payload payload = new Payload(claims.build().toJSONObject());
         JWSObject jws = new JWSObject(header, payload);
@@ -91,17 +90,6 @@ public class JwtService {
         } catch (JOSEException e) {
             throw new IllegalStateException("Không ký được JWT", e);
         }
-    }
-
-    private List<String> extractPermissionKeys(User user) {
-        Role role = user.getRole();
-        if (role == null || role.getPermissions() == null) {
-            return List.of();
-        }
-        return role.getPermissions().stream()
-                .map(Permission::getPermissionKey)
-                .sorted()
-                .toList();
     }
 
     /** Parse token chưa verify — chỉ dùng để đọc {@code jti}/hạn khi logout. */

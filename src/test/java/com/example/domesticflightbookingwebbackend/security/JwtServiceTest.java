@@ -33,12 +33,34 @@ class JwtServiceTest {
         JWTClaimsSet claims = SignedJWT.parse(token).getJWTClaimsSet();
 
         assertThat(claims.getSubject()).isEqualTo("42");
-        assertThat(claims.getStringClaim("email")).isEqualTo("binh@example.com");
         assertThat(claims.getStringClaim("type")).isEqualTo("access");
         assertThat(claims.getJWTID()).isNotBlank();
         assertThat(claims.getStringListClaim("roles")).containsExactly("ROLE_CUSTOMER");
-        assertThat(claims.getStringListClaim("permissions"))
-                .containsExactly("BOOKING_CREATE", "PROFILE_READ_SELF");   // đã sort
+        assertThat(claims.getIssueTime()).isNotNull();
+        assertThat(claims.getExpirationTime()).isNotNull();
+    }
+
+    /** Slim JWT: quyền đọc từ Redis/DB, không nằm trong token. */
+    @Test
+    void accessToken_khongChuaPermissionsVaEmail() throws Exception {
+        JWTClaimsSet claims = SignedJWT.parse(jwtService.generateAccessToken(user)).getJWTClaimsSet();
+
+        assertThat(claims.getClaims()).doesNotContainKeys("permissions", "email");
+        assertThat(claims.getClaims().keySet())
+                .containsExactlyInAnyOrder("sub", "iss", "iat", "exp", "jti", "type", "roles");
+    }
+
+    @Test
+    void refreshToken_cungKhongChuaPermissions() throws Exception {
+        JWTClaimsSet claims = SignedJWT.parse(jwtService.generateRefreshToken(user)).getJWTClaimsSet();
+
+        assertThat(claims.getClaims()).doesNotContainKeys("permissions", "email");
+    }
+
+    /** Token gọn: header + payload + chữ ký vẫn dưới 400 ký tự dù user có nhiều quyền. */
+    @Test
+    void accessToken_gonDuoi400KyTu() {
+        assertThat(jwtService.generateAccessToken(user).length()).isLessThan(400);
     }
 
     @Test
