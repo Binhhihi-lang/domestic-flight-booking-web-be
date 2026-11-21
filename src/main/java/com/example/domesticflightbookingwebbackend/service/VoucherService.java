@@ -67,6 +67,12 @@ public class VoucherService extends BaseCrudService<Voucher, Long, VoucherReques
     private final FareClassRepository fareClassRepository;
     private final FlightRepository flightRepository;
     private final AirportRepository airportRepository;
+    private NotificationService notificationService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setNotificationService(NotificationService notificationService) {
+        this.notificationService = notificationService;
+    }
 
     public VoucherService(VoucherRepository repository,
                           VoucherScopeRepository scopeRepository,
@@ -296,7 +302,18 @@ public class VoucherService extends BaseCrudService<Voucher, Long, VoucherReques
             uv.setSource(UserVoucherSource.GIFTED);
             uv.setReceivedAt(LocalDateTime.now());
             uv.setExpiresAt(voucher.getEndDate().atTime(LocalTime.MAX));
-            userVoucherRepository.save(uv);
+            UserVoucher savedUv = userVoucherRepository.save(uv);
+            if (notificationService != null) {
+                notificationService.notify(
+                        user.getId(),
+                        com.example.domesticflightbookingwebbackend.entity.NotificationType.VOUCHER_ASSIGNED,
+                        "Bạn nhận được voucher " + voucher.getVoucherName(),
+                        voucher.getDescription() != null
+                                ? voucher.getDescription()
+                                : "Voucher đã được thêm vào ví của bạn. Hạn dùng đến " + voucher.getEndDate() + ".",
+                        "/account/vouchers",
+                        "voucher_assigned:" + savedUv.getId());
+            }
             count++;
         }
         log.info("Tặng voucher id={} cho {} user", voucherId, count);

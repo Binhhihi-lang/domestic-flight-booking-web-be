@@ -24,6 +24,7 @@ import com.example.domesticflightbookingwebbackend.entity.FareClass;
 import com.example.domesticflightbookingwebbackend.entity.FareRule;
 import com.example.domesticflightbookingwebbackend.entity.Flight;
 import com.example.domesticflightbookingwebbackend.entity.FlightOperationStatus;
+import com.example.domesticflightbookingwebbackend.entity.NotificationType;
 import com.example.domesticflightbookingwebbackend.entity.Passenger;
 import com.example.domesticflightbookingwebbackend.entity.PassengerGender;
 import com.example.domesticflightbookingwebbackend.entity.PassengerType;
@@ -121,6 +122,12 @@ public class BookingService {
     private final UserVoucherRepository userVoucherRepository;
     private final PricingService pricingService;
     private final SeatHoldService seatHoldService;
+    private NotificationService notificationService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setNotificationService(NotificationService notificationService) {
+        this.notificationService = notificationService;
+    }
 
     /**
      * Tạo đơn đặt vé mới ở trạng thái {@code PENDING_PAYMENT} (giữ 15 phút).
@@ -398,6 +405,15 @@ public class BookingService {
         bookingRepository.save(booking);
 
         releaseResources(booking, previousStatus, now);
+        if (notificationService != null && booking.getUser() != null) {
+            notificationService.notify(
+                    booking.getUser().getId(),
+                    NotificationType.BOOKING_CANCELLED,
+                    "Đơn đặt vé " + booking.getBookingCode() + " đã huỷ",
+                    "Đơn đặt vé " + booking.getBookingCode() + " đã được huỷ (" + booking.getCancelReason() + ").",
+                    "/account/bookings/" + booking.getId(),
+                    "booking:" + booking.getId() + ":cancelled");
+        }
         log.info("Đã hủy đơn đặt vé {} (trạng thái trước khi hủy: {}) — không tự động hoàn tiền",
                 booking.getBookingCode(), previousStatus);
         return buildDetailResponse(booking);

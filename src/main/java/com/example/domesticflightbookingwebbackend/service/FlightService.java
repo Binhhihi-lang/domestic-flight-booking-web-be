@@ -80,6 +80,12 @@ public class FlightService {
     private final FlightFareService flightFareService;
     private final SeatInventoryService seatInventoryService;
     private final FlightMapper flightMapper;
+    private NotificationService notificationService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setNotificationService(NotificationService notificationService) {
+        this.notificationService = notificationService;
+    }
 
     /**
      * Tìm kiếm chuyến bay công khai cho khách ({@code GET /api/public/flights/search}).
@@ -245,6 +251,10 @@ public class FlightService {
         Airport arrAirport = resolveActiveAirport(request.arrivalAirportId(), "Sân bay đến");
         Flight parentFlight = resolveParentFlight(request.parentFlightId(), id);
 
+        boolean scheduleChanged = !flight.getScheduledDeparture().equals(request.scheduledDeparture())
+                || !flight.getScheduledArrival().equals(request.scheduledArrival());
+        FlightOperationStatus oldOpStatus = flight.getOperationStatus();
+
         flight.setFlightNumber(flightNumber);
         flight.setAirline(airline);
         flight.setDepartureAirport(depAirport);
@@ -264,6 +274,7 @@ public class FlightService {
         flight.setUpdatedAt(LocalDateTime.now());
 
         Flight saved = flightRepository.save(flight);
+        emitFlightChangeNotifications(saved, scheduleChanged, oldOpStatus, saved.getOperationStatus());
         log.info("Cập nhật chuyến bay id={} ({}) thành công", id, saved.getFlightNumber());
         return flightMapper.toResponse(saved);
     }
@@ -404,6 +415,77 @@ public class FlightService {
     private void validateNoBooking(Flight flight, String message) {
         if (bookingSegmentRepository.existsByFlightId(flight.getId())) {
             throw new BusinessException(message);
+        }
+    }
+
+    private void emitFlightChangeNotifications(
+            Flight flight,
+            boolean scheduleChanged,
+            FlightOperationStatus oldStatus,
+            FlightOperationStatus newStatus) {
+        if (notificationService == null) {
+            return;
+        }
+        boolean becameDelayed = oldStatus != FlightOperationStatus.DELAYED
+                && newStatus == FlightOperationStatus.DELAYED;
+        boolean becameCancelled = oldStatus != FlightOperationStatus.CANCELLED
+                && newStatus == FlightOperationStatus.CANCELLED;
+
+        if (!scheduleChanged && !becameDelayed && !becameCancelled) {
+            return;
+        }
+
+        List<com.example.domesticflightbookingwebbackend.entity.BookingSegment> segments =
+                bookingSegmentRepository.findByFlightId(flight.getId());
+
+        if (becameCancelled) {
+            String title = "Chuyến bay " + flight.getFlightNumber() + " đã huỷ";
+            String body = "Chuyến bay " + flight.getFlightNumber() + " khởi hành lúc "
+                    + flight.getScheduledDeparture() + " đã bị huỷ. Vui lòng kiểm tra đặt chỗ.";
+            String dedupe = "flight:" + flight.getId() + ":cancelled";
+            notificationService.notifyStaffAndAdmins(
+                    com.example.domesticflightbookingwebbackend.entity.NotificationType.FLIGHT_CANCELLED,
+                    title, body, "/admin/flights", dedupe);
+            for (var seg : segments) {
+                if (seg.getBooking() != null && seg.getBooking().getUser() != null) {
+                    notificationService.notify(
+                            seg.getBooking().getUser().getId(),
+                            com.example.domesticflightbookingwebbackend.entity.NotificationType.FLIGHT_CANCELLED,
+                            title, body, "/account/bookings/" + seg.getBooking().getId(), dedupe);
+                }
+            }
+        } else if (becameDelayed) {
+            String title = "Chuyến bay " + flight.getFlightNumber() + " bị tạm hoãn (DELAYED)";
+            String body = "Chuyến bay " + flight.getFlightNumber() + " dự kiến khởi hành lúc "
+                    + flight.getScheduledDeparture() + ".";
+            String dedupe = "flight:" + flight.getId() + ":delayed:" + flight.getScheduledDeparture();
+            notificationService.notifyStaffAndAdmins(
+                    com.example.domesticflightbookingwebbackend.entity.NotificationType.FLIGHT_DELAYED,
+                    title, body, "/admin/flights", dedupe);
+            for (var seg : segments) {
+                if (seg.getBooking() != null && seg.getBooking().getUser() != null) {
+                    notificationService.notify(
+                            seg.getBooking().getUser().getId(),
+                            com.example.domesticflightbookingwebbackend.entity.NotificationType.FLIGHT_DELAYED,
+                            title, body, "/account/bookings/" + seg.getBooking().getId(), dedupe);
+                }
+            }
+        } else if (scheduleChanged && !segments.isEmpty()) {
+            String title = "Chuyến bay " + flight.getFlightNumber() + " đổi giờ khởi hành";
+            String body = "Giờ khởi hành mới của chuyến " + flight.getFlightNumber() + " là "
+                    + flight.getScheduledDeparture() + ".";
+            String dedupe = "flight:" + flight.getId() + ":schedule:" + flight.getScheduledDeparture();
+            notificationService.notifyStaffAndAdmins(
+                    com.example.domesticflightbookingwebbackend.entity.NotificationType.FLIGHT_SCHEDULE_CHANGED,
+                    title, body, "/admin/flights", dedupe);
+            for (var seg : segments) {
+                if (seg.getBooking() != null && seg.getBooking().getUser() != null) {
+                    notificationService.notify(
+                            seg.getBooking().getUser().getId(),
+                            com.example.domesticflightbookingwebbackend.entity.NotificationType.FLIGHT_SCHEDULE_CHANGED,
+                            title, body, "/account/bookings/" + seg.getBooking().getId(), dedupe);
+                }
+            }
         }
     }
 

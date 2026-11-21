@@ -5,6 +5,7 @@ import com.example.domesticflightbookingwebbackend.dto.request.payment.PaymentRe
 import com.example.domesticflightbookingwebbackend.dto.response.payment.PaymentResponse;
 import com.example.domesticflightbookingwebbackend.entity.Booking;
 import com.example.domesticflightbookingwebbackend.entity.BookingStatus;
+import com.example.domesticflightbookingwebbackend.entity.NotificationType;
 import com.example.domesticflightbookingwebbackend.entity.Payment;
 import com.example.domesticflightbookingwebbackend.entity.PaymentStatus;
 import com.example.domesticflightbookingwebbackend.entity.UserVoucherStatus;
@@ -15,8 +16,8 @@ import com.example.domesticflightbookingwebbackend.exception.ResourceNotFoundExc
 import com.example.domesticflightbookingwebbackend.repository.BookingRepository;
 import com.example.domesticflightbookingwebbackend.repository.PaymentRepository;
 import com.example.domesticflightbookingwebbackend.repository.UserVoucherRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,7 +48,6 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class PaymentService {
 
     private static final String VIETQR_BANK_ID = "VCB";
@@ -60,6 +60,25 @@ public class PaymentService {
     private final UserVoucherRepository userVoucherRepository;
     private final SeatHoldService seatHoldService;
     private final ETicketService eTicketService;
+    private NotificationService notificationService;
+
+    public PaymentService(
+            PaymentRepository paymentRepository,
+            BookingRepository bookingRepository,
+            UserVoucherRepository userVoucherRepository,
+            SeatHoldService seatHoldService,
+            ETicketService eTicketService) {
+        this.paymentRepository = paymentRepository;
+        this.bookingRepository = bookingRepository;
+        this.userVoucherRepository = userVoucherRepository;
+        this.seatHoldService = seatHoldService;
+        this.eTicketService = eTicketService;
+    }
+
+    @Autowired(required = false)
+    public void setNotificationService(NotificationService notificationService) {
+        this.notificationService = notificationService;
+    }
 
     /**
      * Tạo giao dịch thanh toán mới cho đơn đặt vé ({@code POST /api/bookings/{bookingId}/payments}).
@@ -231,6 +250,17 @@ public class PaymentService {
 
         // 3. Phát hành vé điện tử (E-Ticket) + gửi email xác nhận
         eTicketService.issueForBooking(booking);
+
+        // 4. Phát thông báo BOOKING_CONFIRMED cho khách hàng (kèm dedupe_key chống trùng)
+        if (notificationService != null && booking.getUser() != null) {
+            notificationService.notify(
+                    booking.getUser().getId(),
+                    NotificationType.BOOKING_CONFIRMED,
+                    "Đơn đặt vé " + booking.getBookingCode() + " đã thanh toán thành công",
+                    "Cảm ơn quý khách đã thanh toán đơn đặt vé " + booking.getBookingCode() + ". Mã đặt chỗ (PNR) đã được kích hoạt.",
+                    "/account/bookings/" + booking.getId(),
+                    "booking:" + booking.getId() + ":confirmed");
+        }
     }
 
     private void failBooking(Booking booking, String reason) {
