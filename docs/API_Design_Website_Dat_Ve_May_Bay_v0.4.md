@@ -15,7 +15,7 @@ Tài liệu chốt **hợp đồng API (contract)** giữa Backend và Frontend 
 - **Phase 1 (đặc tả đầy đủ):** Authentication & Account, Profile, User Management, RBAC, Master Data (Airline / City / Airport / Aircraft / Seat Map), Promotion, Voucher (+ Claim voucher cho CUSTOMER), News (+ danh mục tin cho khách), **Thao tác hàng loạt**.
 - **Phase 2–3:** liệt kê sơ bộ để khóa naming, không đi sâu (bao gồm Payment, E-Ticket).
 - Tài liệu **không** mô tả code triển khai (service/controller) — chỉ mô tả bề mặt API. *Ngoại lệ: mục 4.9 ghi 2 lỗ hổng phân quyền phát hiện từ code, vì đó là điểm chặn phải sửa trước khi FE nối API thật.*
-- **Chưa đưa vào tài liệu (chờ triển khai sau):** Notifications (bảng `notifications` chưa tạo — xem DB v0.5).
+- **Notifications (cập nhật 21/11/2026):** Đã chốt nghiệp vụ in-app only dùng **Polling 60 giây** (nguồn: `fe/docs/design/00-nghiep-vu-thong-bao.md`), bổ sung 4 endpoint tại mục 3 (Phase 3), bảng `notifications` dựng ở migration **V18**.
 
 > **Cột “Tên API (Chức năng)” (mới v0.4):** mọi bảng endpoint từ mục 2 trở đi có thêm một cột mô tả **chức năng nghiệp vụ** của endpoint bằng tiếng Việt, để FE đặt tên service/method và gắn nhãn UI đúng theo nghiệp vụ, không phải suy diễn từ path.
 
@@ -1007,6 +1007,17 @@ Tỉ lệ cấu hình trong `application.yml` (`app.pricing.child-fare-percent: 
 | GET | `/api/admin/dashboard/operational` | Dashboard vận hành | A — `DASHBOARD_READ_OPERATIONAL` |
 | GET | `/api/admin/dashboard` | Dashboard tổng quan | A — `DASHBOARD_READ` |
 
+### Phase 3 — Notifications (In-app Polling 60s — chốt 18/11/2026)
+
+| Method | Path | Tên API (Chức năng) | Quyền dự kiến |
+|---|---|---|---|
+| GET | `/api/notifications` | Danh sách thông báo của chính tôi (`?unread=true&page=0&size=20`) | A — `NOTIFICATION_READ_SELF` |
+| GET | `/api/notifications/unread-count` | Đếm số thông báo chưa đọc (badge chuông — FE **poll mỗi 60 giây** khi tab mở) | A — `NOTIFICATION_READ_SELF` |
+| PATCH | `/api/notifications/{id}/read` | Đánh dấu 1 thông báo đã đọc (kiểm tra chủ sở hữu `user_id`) | A — `NOTIFICATION_READ_SELF` |
+| PATCH | `/api/notifications/read-all` | Đánh dấu toàn bộ thông báo của tôi đã đọc | A — `NOTIFICATION_READ_SELF` |
+
+> **Quy tắc Notifications:** Chỉ in-app (không WebSocket, không email/SMS/push), áp dụng cho `CUSTOMER`, `STAFF` và `ADMIN` (mỗi người chỉ đọc thông báo của chính mình — **không** có endpoint cho ADMIN đọc hộ user khác và **không** lộ endpoint tạo thông báo cho client; các service nội bộ tự phát kèm `dedupe_key` chống trùng). Bảng `notifications` dựng ở migration **V18**, xóa cứng sau 90 ngày.
+
 > ❌ **ĐÃ BỎ 15/10/2026 — endpoint ví:** ~~`GET /api/wallet`~~ và ~~`GET /api/wallet/transactions`~~. Hệ thống không còn ví khách hàng (xem DB v0.5 mục 3.5). Quyền `WALLET_READ_SELF` cũng bị bỏ.
 
 > **Phân vùng Phase 3:** booking/payment **của khách** giữ ở vùng common (`/bookings`, `/payments`) vì là self-service. Chỉ **màn quản trị** (`/admin/bookings`, `/admin/dashboard`) nằm dưới `/admin`. `POST /payments/callback` là endpoint của cổng thanh toán (public, xác thực chữ ký) — không thuộc `/admin` lẫn `/public` vì không phải khách gọi.
@@ -1135,7 +1146,7 @@ Hai vấn đề dưới đây **phát hiện từ code backend thực tế** (kh
 | **Bulk (mọi module)** | **2.10 — `/admin/{resource}/bulk`, dùng lại `*_UPDATE` / `*_DELETE`, KHÔNG sinh key mới** |
 | `FLIGHT_*`, `FARE_CLASS_*`, `FLIGHT_FARE_*`, `BAGGAGE_*`, `FARE_RULE_*`, `SEAT_INVENTORY_*` | 3 — Phase 2 |
 | `PASSENGER_*`, `BOOKING_*`, `PAYMENT_*`, `ETICKET_READ_SELF`, `DASHBOARD_*` | 3 — Phase 3 |
-| `NOTIFICATION_READ_SELF` | Chưa có endpoint — bảng `notifications` chưa triển khai |
+| `NOTIFICATION_READ_SELF` | 3 — Phase 3 (`/api/notifications/**` — in-app polling 60s, chốt 18/11/2026, chờ V18) |
 
 ---
 

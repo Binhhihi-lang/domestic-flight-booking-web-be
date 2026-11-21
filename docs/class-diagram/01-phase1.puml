@@ -550,7 +550,6 @@ SeatTypeService --> SeatTypeMapper
 Role "1" -- "0..*" User : được gán cho
 Role "0..*" -- "0..*" Permission : được cấp (role_permissions)
 City "1" -- "0..*" Airport : chứa
-Airport "1" -- "0..*" AircraftSeat : —
 Aircraft "1" -- "0..*" AircraftSeat : có sơ đồ ghế
 SeatType "1" -- "0..*" AircraftSeat : phân loại
 Promotion "1" -- "0..*" PromotionScope : có

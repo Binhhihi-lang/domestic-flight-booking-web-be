@@ -171,7 +171,7 @@ Hai điều chỉnh của v0.4 không cần bước đổi tên riêng trong mig
 | 33 | e_tickets | D — ĐẶT VÉ, THANH TOÁN & VÉ ĐIỆN TỬ | GIỮ NGUYÊN |
 | ~~34~~ | ~~wallets~~ | ~~E — VÍ KHÁCH HÀNG (WALLET)~~ | **BỎ (15/10/2026)** |
 | ~~35~~ | ~~wallet_transactions~~ | ~~E — VÍ KHÁCH HÀNG (WALLET)~~ | **BỎ (15/10/2026)** |
-| 34 | notifications | F — THÔNG BÁO (NOTIFICATION) | CHƯA TRIỂN KHAI |
+| 34 | notifications | F — THÔNG BÁO (NOTIFICATION) | **ĐÃ CHỐT (18/11/2026 · chờ V18)** |
 
 > **Nhóm E (Wallet) đã bị bỏ hoàn toàn ngày 15/10/2026.** Hệ thống không còn ví khách hàng và không tự động hoàn tiền. Tổng số bảng còn **34** (33 bảng dựng ngay + `notifications` chưa triển khai). Xem mục 5.5 để biết luồng hủy vé mới.
 
@@ -796,23 +796,31 @@ Dữ liệu danh mục do ADMIN quản lý ở Phase 1: hãng bay, thành phố,
 
 ### 3.6 NHÓM F — THÔNG BÁO (NOTIFICATION)
 
-#### F.1 notifications (chưa triển khai)
+#### F.1 notifications (đã chốt 18/11/2026 — chờ migration V18)
 
-**So với v0.4:** GIỮ TRONG TÀI LIỆU, CHƯA TRIỂN KHAI
+**So với v0.4:** ĐÃ CHỐT NGHIỆP VỤ (in-app only, polling 60s; nguồn: `fe/docs/design/00-nghiep-vu-thong-bao.md`)
 
 | Thuộc tính | Kiểu dữ liệu | Constraint | Ý nghĩa |
 |---|---|---|---|
 | id | BIGINT | PK, IDENTITY | Khóa chính |
-| user_id | BIGINT | NOT NULL, FK → users.id | Người nhận |
-| type | VARCHAR(30) | NOT NULL, CHECK IN (REGISTER_SUCCESS, PAYMENT_SUCCESS, PAYMENT_FAILED, BOOKING_CANCELLED, E_TICKET_AVAILABLE) | Loại sự kiện |
-| title | VARCHAR(200) | NOT NULL | Tiêu đề |
-| content | TEXT | NOT NULL | Nội dung |
-| booking_id | BIGINT | NULL, FK → bookings.id | Booking liên quan |
+| user_id | BIGINT | NOT NULL, FK → users.id | Người nhận (ADMIN / STAFF / CUSTOMER) |
+| type | VARCHAR(40) | NOT NULL, CHECK IN (FLIGHT_SCHEDULE_CHANGED, FLIGHT_DELAYED, FLIGHT_CANCELLED, BOOKING_PAYMENT_EXPIRING, BOOKING_CONFIRMED, BOOKING_CANCELLED, ETICKET_ISSUED, VOUCHER_ASSIGNED, VOUCHER_EXPIRING) | Loại sự kiện thông báo (9 loại) |
+| title | VARCHAR(200) | NOT NULL | Tiêu đề ngắn gọn |
+| body | VARCHAR(500) | NULL | Mô tả chi tiết (tùy chọn) |
+| link_url | VARCHAR(300) | NULL | Đường dẫn nội bộ điều hướng trên FE (vd `/account/bookings/AB3K9F`, `/staff/flights/165`) |
 | is_read | BOOLEAN | NOT NULL, DEFAULT false | Đã đọc chưa |
-| read_at | TIMESTAMPTZ | NULL | Thời điểm đọc |
-| created_at | TIMESTAMPTZ | NOT NULL | Thời điểm tạo |
+| read_at | TIMESTAMPTZ | NULL | Thời điểm đánh dấu đã đọc |
+| dedupe_key | VARCHAR(120) | NULL | Khóa chống phát trùng sự kiện (vd `payment:{paymentId}:success`) |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT now() | Thời điểm tạo |
 
-**Ghi chú:** Bảng này CHƯA triển khai ở giai đoạn hiện tại (chốt 2026-10-11): không tạo bảng trong migration.
+**Index bắt buộc:**
+- `idx_notifications_user_read_created ON notifications (user_id, is_read, created_at DESC)` — tối ưu truy vấn danh sách & đếm chưa đọc khi FE poll 60 giây.
+- `uq_notifications_dedupe ON notifications (user_id, dedupe_key) WHERE dedupe_key IS NOT NULL` — chống phát trùng thông báo khi callback/job chạy lặp.
+
+**Ghi chú:**
+- Không dùng `booking_id` FK cố định mà dùng `link_url` linh hoạt (vì thông báo còn liên quan đến Flight và Voucher).
+- Không có cột `is_deleted` — đây không phải dữ liệu đối soát, job định kỳ **xóa cứng sau 90 ngày** (BR-NOTI-05).
+- Sẽ tạo bảng ở migration **V18**.
 
 ---
 
@@ -918,12 +926,11 @@ Ví dụ `roles (1) —— (0..*) users`: một role gán cho 0 hoặc nhiều u
 > - ~~56 — Ví có giao dịch (`wallets 1 — 0..* wallet_transactions`)~~
 > - ~~57 — Booking phát sinh giao dịch hoàn (`bookings 1 — 0..1 wallet_transactions`)~~
 
-#### Nhóm F — Notification (chưa triển khai)
+#### Nhóm F — Notification (đã chốt 18/11/2026 · chờ V18)
 
 | # | Tên quan hệ | Bảng A | A→B | B→A | Bảng B | Cột khóa ngoại | Mô tả |
 |---|---|---|---|---|---|---|---|
-| 58 | Người dùng nhận thông báo | users | 1 | 0..* | notifications | notifications.user_id | Nhiều thông báo |
-| 59 | Booking liên quan thông báo | bookings | 1 | 0..* | notifications | notifications.booking_id | NULL nếu không gắn booking |
+| 58 | Người dùng nhận thông báo | users | 1 | 0..* | notifications | notifications.user_id | Mỗi user chỉ xem thông báo của mình (bỏ `booking_id`, thay bằng `link_url` + `dedupe_key`) |
 
 ### 4.3 Sơ đồ quan hệ (Mermaid — để tham chiếu khi vẽ class diagram)
 
@@ -974,7 +981,6 @@ erDiagram
     passengers ||--o{ e_tickets : "có vé"
     flight_seats ||--o{ e_tickets : "tham chiếu"
     users ||--o{ notifications : "nhận"
-    bookings ||--o{ notifications : "liên quan"
 ```
 
 **Chú thích ký hiệu Mermaid:** `||--o{` = 1 — 0..*, `||--|{` = 1 — 1..*, `||--||` = 1 — 1.
@@ -1073,7 +1079,7 @@ Thao tác hàng loạt (xóa mềm, bật/tắt `is_active` nhiều bản ghi m�
 | # | Điểm | Mặc định đang dùng |
 |---|---|---|
 | 1 | Nhiều phi cơ cho một chuyến | Mỗi chuyến đúng 1 máy bay; khi cầu cao mở chuyến bổ sung nối bằng `parent_flight_id`. |
-| 2 | Bảng notifications | Chưa triển khai giai đoạn này. |
+| 2 | Bảng notifications | Đã chốt nghiệp vụ (18/11/2026): chỉ in-app (polling 60s), xóa cứng sau 90 ngày, dựng ở migration V18. |
 | 3 | Hoàn trên số tiền nào | ~~Trên `bookings.total_amount`.~~ **Không áp dụng từ 15/10/2026** — hệ thống không tính tiền hoàn; đại lý xử lý ngoài hệ thống. |
 | 4 | Vé khứ hồi | Hủy cả booking, tính theo giờ khởi hành của chặng sớm nhất. |
 | 5 | Thời hạn được hủy | Chỉ hủy được trước giờ khởi hành dự kiến. |

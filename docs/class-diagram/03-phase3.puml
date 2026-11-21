@@ -3,9 +3,9 @@
 ' SƠ ĐỒ LỚP — 03. PHASE 3: BOOKING CORE
 ' Website Đặt Vé Máy Bay Nội Địa — DB v0.5 / API v0.4
 '
-' 9 module: Booking · BookingSegment · Passenger · SeatHold
-'           · BookingBaggage · Payment · ETicket · Dashboard
-'           (Nhóm Wallet/Ví ĐÃ BỎ 15/10/2026)
+' 10 module: Booking · BookingSegment · Passenger · SeatHold
+'            · BookingBaggage · Payment · ETicket · Dashboard · Notification
+'            (Nhóm Wallet/Ví ĐÃ BỎ 15/10/2026)
 ' Lớp cơ sở (Base*) xem file 00-kien-truc-chung.puml.
 ' ===================================================================
 
@@ -98,7 +98,7 @@ package "2 · Seat Hold (giữ ghế 15 phút)" #F5F2FB {
 
   class SeatHoldService {
     - seatHoldRepository : SeatHoldRepository
-    - flightSeatRepository : FlightSeatRepository
+    - seatInventoryService : SeatInventoryService
     - bookingRepository : BookingRepository
     - passengerRepository : PassengerRepository
     ..
@@ -179,6 +179,45 @@ package "5 · Dashboard" #F7F7F7 {
     ..
     + operational() : OperationalDashboardResponse  «chuyến sắp bay, ghế còn lại»
     + overview() : OverviewDashboardResponse  «doanh thu, số booking»
+  }
+}
+
+' ============================================================
+' 6. NOTIFICATION (in-app · Polling 60s · chốt 18/11/2026)
+' ============================================================
+package "6 · Notification (Thông báo in-app · Polling 60s)" #F2F7FB {
+
+  class NotificationController {
+    - notificationService : NotificationService
+    ..
+    + listSelf(Boolean unread, ListQuery) : ApiResponse<PageData<NotificationResponse>>
+    + unreadCount() : ApiResponse<UnreadCountResponse>  «FE poll 60s»
+    + markAsRead(Long id) : ApiResponse<Void>
+    + markAllAsRead() : ApiResponse<Void>
+  }
+
+  class NotificationService {
+    - notificationRepository : NotificationRepository
+    - userRepository : UserRepository
+    ..
+    + listSelf(Long userId, Boolean unread, ListQuery) : PageData<NotificationResponse>
+    + countUnread(Long userId) : long
+    + markAsRead(Long userId, Long id) : void  «kiểm tra chủ sở hữu»
+    + markAllAsRead(Long userId) : int
+    + notify(Long userId, NotificationType type, String title, String body, String linkUrl, String dedupeKey) : void  «nội bộ»
+    + purgeOlderThan90Days() : int  «job xóa cứng sau 90 ngày»
+  }
+
+  enum NotificationType <<enumeration>> {
+    FLIGHT_SCHEDULE_CHANGED
+    FLIGHT_DELAYED
+    FLIGHT_CANCELLED
+    BOOKING_PAYMENT_EXPIRING
+    BOOKING_CONFIRMED
+    BOOKING_CANCELLED
+    ETICKET_ISSUED
+    VOUCHER_ASSIGNED
+    VOUCHER_EXPIRING
   }
 }
 
@@ -268,6 +307,18 @@ package "Entity (Phase 3)" #FEF9F0 {
     - status : ETicketStatus
     - issuedAt : LocalDateTime
   }
+
+  class Notification {
+    - user : User
+    - type : NotificationType
+    - title : String
+    - body : String
+    - linkUrl : String
+    - isRead : Boolean
+    - readAt : LocalDateTime
+    - dedupeKey : String
+    - createdAt : LocalDateTime
+  }
 }
 
 ' ============================================================
@@ -279,10 +330,15 @@ SeatHoldController --> SeatHoldService
 PaymentController --> PaymentService
 ETicketController --> ETicketService
 DashboardController --> DashboardService
+NotificationController --> NotificationService
 
 BookingService --> PricingService
+SeatHoldService --> SeatInventoryService : «khóa/nhả ghế nguyên tử»
 PaymentService --> SeatHoldService
 PaymentService --> ETicketService
+BookingService ..> NotificationService : «phát thông báo»
+PaymentService ..> NotificationService : «phát thông báo»
+ETicketService ..> NotificationService : «phát thông báo»
 
 User "1" -- "0..*" Booking : tạo
 Booking "1" -- "0..*" BookingSegment : có chặng
@@ -302,6 +358,7 @@ Booking "1" -- "0..*" ETicket : phát hành
 BookingSegment "1" -- "0..*" ETicket : có vé
 Passenger "1" -- "0..*" ETicket : có vé
 FlightSeat "0..1" -- "0..*" ETicket : tham chiếu
+User "1" -- "0..*" Notification : nhận
 
 note bottom of Booking
   KHÔNG có ví và KHÔNG tự hoàn tiền (15/10/2026).
@@ -335,6 +392,18 @@ note bottom of ETicket
   PNR lấy từ bookings.booking_code —
   không có cột pnr_code riêng.
   UNIQUE (booking_segment_id, passenger_id).
+end note
+
+note bottom of NotificationService
+  Thông báo in-app (Polling 60s, bảng tạo ở V18):
+  - Không lộ API tạo thông báo; các service nội bộ tự gọi notify():
+    * FlightService → FLIGHT_SCHEDULE_CHANGED / DELAYED / CANCELLED
+    * BookingService / Job → BOOKING_PAYMENT_EXPIRING / CANCELLED
+    * PaymentService → BOOKING_CONFIRMED
+    * ETicketService → ETICKET_ISSUED
+    * VoucherService / Job → VOUCHER_ASSIGNED / VOUCHER_EXPIRING
+  - Dùng dedupe_key (UNIQUE per user) chống phát trùng.
+  - Job định kỳ xóa cứng bản ghi quá 90 ngày (không soft delete).
 end note
 
 @enduml

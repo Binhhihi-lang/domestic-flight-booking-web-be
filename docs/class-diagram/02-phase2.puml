@@ -249,6 +249,7 @@ BaggageOptionController --|> BaseCrudController
 
 FareClassService --|> BaseCrudService
 FareRuleService --|> BaseCrudService
+FlightFareService --|> BaseCrudService
 BaggageOptionService --|> BaseCrudService
 
 FlightSearchController --> FlightService

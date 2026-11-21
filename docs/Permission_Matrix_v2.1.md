@@ -242,13 +242,13 @@ Ký hiệu: ✅ = được phép · — = không được phép.
 
 > **ĐÃ BỎ khỏi bảng (v2.1):** ~~Wallet | WALLET_READ_SELF~~. Hệ thống không còn ví khách hàng và không tự động hoàn tiền — khách liên hệ đại lý (email + số điện thoại trên website) để yêu cầu hoàn tiền. Xem DB v0.5 mục 3.5 và 5.5.
 
-### 5.9 Notification (chưa triển khai)
+### 5.9 Notification (đã chốt 18/11/2026 — chờ migration V18)
 
 | Module | Permission | GUEST | CUSTOMER | STAFF | ADMIN |
 |---|---|---|---|---|---|
-| Notification | NOTIFICATION_READ_SELF | — | — | — | — |
+| Notification | NOTIFICATION_READ_SELF | — | ✅ | ✅ | ✅ |
 
-> Bảng `notifications` chưa triển khai giai đoạn này — key đã seed nhưng chưa có endpoint.
+> **Quy tắc:** Mỗi user đã đăng nhập (`CUSTOMER`, `STAFF`, `ADMIN`) chỉ được xem danh sách, đếm số chưa đọc (polling 60s) và đánh dấu đã đọc (`GET /api/notifications`, `GET /api/notifications/unread-count`, `PATCH /api/notifications/{id}/read`, `PATCH /api/notifications/read-all`) đối với **thông báo của chính mình** (BR-NOTI-01). Không có quyền đọc hộ thông báo của user khác và không có endpoint tạo thông báo từ client. Bảng `notifications` sẽ tạo ở migration **V18**.
 
 ### 5.10 ⚠️ Các điểm lệch giữa Permission Matrix v2.0 và DB seed
 
