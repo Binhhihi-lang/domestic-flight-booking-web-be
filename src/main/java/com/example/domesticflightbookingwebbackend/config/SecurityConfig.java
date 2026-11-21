@@ -57,6 +57,9 @@ public class SecurityConfig {
                         // không bao giờ lọt xuống nhánh authenticated.
                         .requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()
 
+                        // Callback từ cổng thanh toán (VNPay / VietQR / Mock Gateway) — xác thực bằng chữ ký/idempotency
+                        .requestMatchers(HttpMethod.POST, "/api/payments/callback").permitAll()
+
                         // Auth công khai: đăng ký, đăng nhập, quên/đặt lại mật khẩu.
                         // Logout + change-password yêu cầu token nên khai báo riêng TRƯỚC.
                         .requestMatchers("/api/auth/logout", "/api/auth/change-password").authenticated()

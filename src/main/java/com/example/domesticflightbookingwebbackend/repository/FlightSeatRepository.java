@@ -54,6 +54,24 @@ public interface FlightSeatRepository extends JpaRepository<FlightSeat, Long> {
         Long getAvailableCount();
     }
 
+    /** Đếm số lượng ghế theo từng trạng thái cho một tập chuyến bay (dùng cho Dashboard vận hành & tổng quan). */
+    @Query("""
+            SELECT fs.flight.id AS flightId,
+                   fs.status AS status,
+                   COUNT(fs.id) AS seatCount
+            FROM FlightSeat fs
+            WHERE fs.flight.id IN :flightIds
+            GROUP BY fs.flight.id, fs.status
+            """)
+    List<FlightStatusCount> countSeatsByFlightIdsAndStatus(
+            @Param("flightIds") Collection<Long> flightIds);
+
+    interface FlightStatusCount {
+        Long getFlightId();
+        FlightSeatStatus getStatus();
+        Long getSeatCount();
+    }
+
     /**
      * Khóa ghế nguyên tử chống tranh chấp (DB v0.5 mục 5.2):
      * chỉ đổi sang HOLD và tăng version nếu ghế đang AVAILABLE.
