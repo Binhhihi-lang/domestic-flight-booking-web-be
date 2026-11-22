@@ -353,6 +353,32 @@ public class BookingService {
         return buildDetailResponse(booking);
     }
 
+    /**
+     * Tra cứu công khai theo mã đặt chỗ (hoặc mã đơn DH-id) và email chủ đơn ({@code GET /api/public/bookings/lookup}).
+     */
+    @Transactional(readOnly = true)
+    public BookingDetailResponse lookupPublic(String bookingCode, String email) {
+        if (bookingCode == null || bookingCode.isBlank() || email == null || email.isBlank()) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Vui lòng nhập đầy đủ mã đặt chỗ và email");
+        }
+        String cleanCode = bookingCode.trim().toUpperCase();
+        String cleanEmail = email.trim().toLowerCase();
+
+        Booking booking = null;
+        if (cleanCode.startsWith("DH-") && cleanCode.substring(3).matches("\\d+")) {
+            Long id = Long.parseLong(cleanCode.substring(3));
+            booking = bookingRepository.findWithUserById(id).orElse(null);
+        }
+        if (booking == null) {
+            booking = bookingRepository.findWithUserByBookingCodeIgnoreCase(cleanCode).orElse(null);
+        }
+        if (booking == null || booking.getUser() == null
+                || !cleanEmail.equalsIgnoreCase(booking.getUser().getEmail())) {
+            throw new ResourceNotFoundException("Không tìm thấy đơn đặt chỗ khớp với mã và email đã nhập");
+        }
+        return buildDetailResponse(booking);
+    }
+
     // ================= Helpers =================
 
     private Booking findBookingOrThrow(Long bookingId) {

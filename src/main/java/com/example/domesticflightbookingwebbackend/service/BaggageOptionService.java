@@ -115,6 +115,18 @@ public class BaggageOptionService extends BaseCrudService<BaggageOption, Long, B
         return baggageOptionRepository.findAll(buildSpec(query, filters), pageable);
     }
 
+    /** Danh sách gói hành lý đang hoạt động cho khách hàng ({@code GET /api/public/baggage-options}). */
+    public com.example.domesticflightbookingwebbackend.common.PageData<BaggageOptionResponse> listPublic(
+            ListQuery query, Long airlineId) {
+        Map<String, String> filters = new java.util.HashMap<>();
+        filters.put("status", "ACTIVE");
+        if (airlineId != null) {
+            filters.put("airline_id", String.valueOf(airlineId));
+        }
+        return com.example.domesticflightbookingwebbackend.common.PageMapper.toPageData(
+                search(query, filters), this::toResponse);
+    }
+
     private Specification<BaggageOption> buildSpec(ListQuery query, Map<String, String> filters) {
         return (root, cq, cb) -> {
             List<Predicate> predicates = new ArrayList<>();

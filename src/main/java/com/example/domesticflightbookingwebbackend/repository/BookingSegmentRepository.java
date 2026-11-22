@@ -31,7 +31,7 @@ public interface BookingSegmentRepository extends JpaRepository<BookingSegment, 
     })
     List<BookingSegment> findByBookingIdInOrderBySegmentOrderAsc(Collection<Long> bookingIds);
 
-    /** Lấy danh sách các chặng đặt chỗ của một chuyến bay kèm booking và khách hàng (dùng khi phát thông báo đổi giờ/hoãn/hủy chuyến). */
-    @EntityGraph(attributePaths = {"booking", "booking.user"})
+    /** Lấy danh sách các chặng đặt chỗ của một chuyến bay kèm booking, khách hàng và hạng vé (dùng khi phát thông báo & chi tiết chuyến bay). */
+    @EntityGraph(attributePaths = {"booking", "booking.user", "fareClass"})
     List<BookingSegment> findByFlightId(Long flightId);
 }

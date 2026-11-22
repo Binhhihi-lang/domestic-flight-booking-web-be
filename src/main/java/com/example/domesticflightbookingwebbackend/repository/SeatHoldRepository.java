@@ -21,6 +21,9 @@ public interface SeatHoldRepository extends JpaRepository<SeatHold, Long> {
     @EntityGraph(attributePaths = {"passenger", "flightSeat", "flightSeat.flight"})
     List<SeatHold> findByBookingIdAndStatusIn(Long bookingId, Collection<SeatHoldStatus> statuses);
 
+    @EntityGraph(attributePaths = {"passenger", "flightSeat"})
+    List<SeatHold> findByBookingIdInAndStatusIn(Collection<Long> bookingIds, Collection<SeatHoldStatus> statuses);
+
     /** Tìm các lượt giữ ghế đang ở trạng thái HOLD nhưng đã hết hạn 15 phút để job giải phóng. */
     @EntityGraph(attributePaths = {"booking", "flightSeat"})
     List<SeatHold> findByStatusAndHoldExpiresAtBefore(SeatHoldStatus status, LocalDateTime now);

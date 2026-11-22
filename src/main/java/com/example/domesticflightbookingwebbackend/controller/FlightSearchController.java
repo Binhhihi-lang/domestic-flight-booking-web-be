@@ -6,8 +6,15 @@ import com.example.domesticflightbookingwebbackend.common.PageData;
 import com.example.domesticflightbookingwebbackend.dto.response.flight.FlightDetailResponse;
 import com.example.domesticflightbookingwebbackend.dto.response.flight.FlightResponse;
 import com.example.domesticflightbookingwebbackend.dto.response.flight.FlightSearchResult;
+import com.example.domesticflightbookingwebbackend.dto.response.flight.FlightSeatMapResponse;
+import com.example.domesticflightbookingwebbackend.entity.Airport;
 import com.example.domesticflightbookingwebbackend.entity.TripType;
+import com.example.domesticflightbookingwebbackend.exception.AppException;
+import com.example.domesticflightbookingwebbackend.exception.ErrorCode;
+import com.example.domesticflightbookingwebbackend.exception.ResourceNotFoundException;
+import com.example.domesticflightbookingwebbackend.repository.AirportRepository;
 import com.example.domesticflightbookingwebbackend.service.FlightService;
+import com.example.domesticflightbookingwebbackend.service.SeatInventoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,23 +36,31 @@ import java.util.List;
 public class FlightSearchController {
 
     private final FlightService flightService;
+    private final SeatInventoryService seatInventoryService;
+    private final AirportRepository airportRepository;
 
     /**
      * Tìm chuyến bay theo tuyến/ngày ({@code GET /api/public/flights/search}).
-     * Nhận hoặc {@code passengers} (tổng khách cần ghế), hoặc tách {@code adults} + {@code children} + {@code infants}
-     * (em bé không chiếm ghế nên số ghế cần kiểm tra = {@code adults + children}).
+     * Nhận ID hoặc mã sân bay (IATA code), và tách {@code adults} + {@code children} + {@code infants}.
      */
     @GetMapping("/search")
     public ApiResponse<List<FlightSearchResult>> search(
-            @RequestParam(name = "departure_airport_id") Long departureAirportId,
-            @RequestParam(name = "arrival_airport_id") Long arrivalAirportId,
-            @RequestParam(name = "departure_date")
+            @RequestParam(name = "departure_airport_id", required = false) Long departureAirportId,
+            @RequestParam(name = "arrival_airport_id", required = false) Long arrivalAirportId,
+            @RequestParam(name = "departure_airport_code", required = false) String departureAirportCode,
+            @RequestParam(name = "arrival_airport_code", required = false) String arrivalAirportCode,
+            @RequestParam(name = "departure_date", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate departureDate,
             @RequestParam(name = "passengers", required = false) Integer passengers,
             @RequestParam(name = "adults", required = false) Integer adults,
             @RequestParam(name = "children", required = false) Integer children,
             @RequestParam(name = "infants", required = false) Integer infants,
             @RequestParam(name = "trip_type", defaultValue = "ONE_WAY") TripType tripType) {
+
+        Long resolvedDepId = resolveAirportId(departureAirportId, departureAirportCode, "Sân bay đi");
+        Long resolvedArrId = resolveAirportId(arrivalAirportId, arrivalAirportCode, "Sân bay đến");
+        LocalDate effectiveDate = departureDate != null ? departureDate : LocalDate.now().plusDays(1);
+
         int seatPassengers;
         if (passengers != null) {
             seatPassengers = passengers;
@@ -55,7 +70,7 @@ public class FlightSearchController {
             seatPassengers = adt + chd;
         }
         return ApiResponse.success(flightService.search(
-                departureAirportId, arrivalAirportId, departureDate, seatPassengers, tripType));
+                resolvedDepId, resolvedArrId, effectiveDate, seatPassengers, tripType));
     }
 
     @GetMapping
@@ -73,5 +88,27 @@ public class FlightSearchController {
     @GetMapping("/{id}")
     public ApiResponse<FlightDetailResponse> getById(@PathVariable Long id) {
         return ApiResponse.success(flightService.getPublicById(id));
+    }
+
+    /**
+     * Sơ đồ ghế công khai của chuyến bay đang mở bán — dùng cho khách hàng ở bước chọn ghế
+     * mà không cần quyền quản trị {@code /api/admin/**}.
+     */
+    @GetMapping("/{id}/seat-map")
+    public ApiResponse<FlightSeatMapResponse> getPublicSeatMap(@PathVariable Long id) {
+        flightService.getPublicById(id);
+        return ApiResponse.success(seatInventoryService.getSeatMap(id));
+    }
+
+    private Long resolveAirportId(Long id, String code, String label) {
+        if (id != null) {
+            return id;
+        }
+        if (code != null && !code.isBlank()) {
+            Airport airport = airportRepository.findByAirportCodeAndIsDeletedFalse(code.trim().toUpperCase())
+                    .orElseThrow(() -> new ResourceNotFoundException(label + " không tồn tại: " + code));
+            return airport.getId();
+        }
+        throw new AppException(ErrorCode.VALIDATION_ERROR, label + " không được để trống");
     }
 }

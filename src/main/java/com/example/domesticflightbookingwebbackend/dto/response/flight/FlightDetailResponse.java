@@ -9,7 +9,7 @@ import java.util.List;
 
 /**
  * Chi tiết một chuyến bay (dùng cho cả GET /api/public/flights/{id} và GET /api/admin/flights/{id}),
- * kèm danh sách các hạng giá đang mở và thống kê số ghế.
+ * kèm danh sách các hạng giá đang mở, thống kê số ghế và danh sách hành khách (chỉ trả ở vùng quản trị).
  */
 public record FlightDetailResponse(
         Long id,
@@ -28,7 +28,19 @@ public record FlightDetailResponse(
         long totalSeats,
         long availableSeats,
         List<PricedFareResponse> fares,
+        List<FlightPassengerItem> passengers,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
+    public record FlightPassengerItem(
+            String bookingCode,
+            String pnrCode,
+            String fullName,
+            String passengerType,
+            String seatCode,
+            String fareClassName,
+            String bookingStatus,
+            boolean checkedIn
+    ) {
+    }
 }
