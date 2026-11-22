@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
@@ -34,6 +35,7 @@ public class DataInitializer {
     private String adminPassword;
 
     @Bean
+    @Order(10)
     public ApplicationRunner initAdminAccount() {
         return args -> {
             if (userRepository.count() > 0) {

@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
  * Seeder dữ liệu lớn sát thực tế cho 5 hãng hàng không nội địa Việt Nam
@@ -36,6 +37,7 @@ public class LargeDatasetSeeder {
     private static final int TARGET_FLIGHTS = 100_000;
 
     private final JdbcTemplate jdbcTemplate;
+    private final PasswordEncoder passwordEncoder;
 
     @Value("${app.seed.large-dataset:true}")
     private boolean seedEnabled;
@@ -50,45 +52,38 @@ public class LargeDatasetSeeder {
             }
             Long currentFlights = jdbcTemplate.queryForObject(
                     "SELECT COUNT(*) FROM flights WHERE is_deleted = false", Long.class);
-            if (currentFlights != null && currentFlights >= TARGET_FLIGHTS) {
-                log.info("Database đã có {} chuyến bay (>= {}), bỏ qua LargeDatasetSeeder.",
+            if (currentFlights == null || currentFlights < TARGET_FLIGHTS) {
+                long t0 = System.currentTimeMillis();
+                log.info("=== BẮT ĐẦU SEED DỮ LIỆU THỰC TẾ LỚN (100.000 CHUYẾN BAY CỦA 5 HÃNG HÀNG KHÔNG) ===");
+
+                seedAircraftFleetAndSeatMaps();
+                seedPromotionsVouchersAndNews();
+                seed100kFlightsAndFaresAndSeatInventory();
+                resetAllSequences();
+
+                long elapsedMs = System.currentTimeMillis() - t0;
+                log.info("=== HOÀN TẤT SEED 100K CHUYẾN BAY TRONG {} ms ===", elapsedMs);
+            } else {
+                log.info("Database đã có {} chuyến bay (>= {}), giữ nguyên bảng chuyến bay và kiểm tra bổ sung dữ liệu còn thiếu...",
                         currentFlights, TARGET_FLIGHTS);
-                return;
             }
 
-            long t0 = System.currentTimeMillis();
-            log.info("=== BẮT ĐẦU SEED DỮ LIỆU THỰC TẾ LỚN (100.000 CHUYẾN BAY CỦA 5 HÃNG HÀNG KHÔNG) ===");
-
             seedAirlinesLogosAndCitiesImages();
-            seedAircraftFleetAndSeatMaps();
-            seedPromotionsVouchersAndNews();
-            seed100kFlightsAndFaresAndSeatInventory();
-            resetAllSequences();
-
-            long elapsedMs = System.currentTimeMillis() - t0;
-            Long totalFlights = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM flights", Long.class);
-            Long totalFares = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM flight_fares", Long.class);
-            Long totalFlightSeats = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM flight_seats", Long.class);
-            Long totalAircrafts = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM aircrafts", Long.class);
-            Long totalAircraftSeats = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM aircraft_seats", Long.class);
-
-            log.info("=== HOÀN TẤT SEED DỮ LIỆU LỚN TRONG {} ms ===", elapsedMs);
-            log.info("Thống kê dữ liệu sau khi seed: aircrafts={}, aircraft_seats={}, flights={}, flight_fares={}, flight_seats={}",
-                    totalAircrafts, totalAircraftSeats, totalFlights, totalFares, totalFlightSeats);
+            seedSupplementaryFullData();
         };
     }
 
     private void seedAirlinesLogosAndCitiesImages() {
         jdbcTemplate.execute("""
                 UPDATE airlines SET logo_url = CASE airline_code
-                    WHEN 'VN' THEN 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Vietnam_Airlines_logo.svg/512px-Vietnam_Airlines_logo.svg.png'
-                    WHEN 'VJ' THEN 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/19/VietJet_Air_logo.svg/512px-VietJet_Air_logo.svg.png'
-                    WHEN 'QH' THEN 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/75/Bamboo_Airways_Logo.svg/512px-Bamboo_Airways_Logo.svg.png'
-                    WHEN 'BL' THEN 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Pacific_Airlines_logo.svg/512px-Pacific_Airlines_logo.svg.png'
-                    WHEN 'VU' THEN 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Vietravel_Airlines_Logo.svg/512px-Vietravel_Airlines_Logo.svg.png'
+                    WHEN 'VN' THEN 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 40%27%3E%3Crect width=%2764%27 height=%2740%27 rx=%278%27 fill=%27%2300588A%27/%3E%3Ctext x=%2732%27 y=%2726%27 fill=%27%23F6B900%27 font-family=%27Arial%27 font-size=%2718%27 font-weight=%27bold%27 text-anchor=%27middle%27%3EVN%3C/text%3E%3C/svg%3E'
+                    WHEN 'VJ' THEN 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 40%27%3E%3Crect width=%2764%27 height=%2740%27 rx=%278%27 fill=%27%23E1251B%27/%3E%3Ctext x=%2732%27 y=%2726%27 fill=%27%23FFD600%27 font-family=%27Arial%27 font-size=%2718%27 font-weight=%27bold%27 text-anchor=%27middle%27%3EVJ%3C/text%3E%3C/svg%3E'
+                    WHEN 'QH' THEN 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 40%27%3E%3Crect width=%2764%27 height=%2740%27 rx=%278%27 fill=%27%23003B73%27/%3E%3Ctext x=%2732%27 y=%2726%27 fill=%27%235BC0BE%27 font-family=%27Arial%27 font-size=%2718%27 font-weight=%27bold%27 text-anchor=%27middle%27%3EQH%3C/text%3E%3C/svg%3E'
+                    WHEN 'BL' THEN 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 40%27%3E%3Crect width=%2764%27 height=%2740%27 rx=%278%27 fill=%27%23004E92%27/%3E%3Ctext x=%2732%27 y=%2726%27 fill=%27%23FFFFFF%27 font-family=%27Arial%27 font-size=%2718%27 font-weight=%27bold%27 text-anchor=%27middle%27%3EBL%3C/text%3E%3C/svg%3E'
+                    WHEN 'VU' THEN 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 40%27%3E%3Crect width=%2764%27 height=%2740%27 rx=%278%27 fill=%27%230B1D51%27/%3E%3Ctext x=%2732%27 y=%2726%27 fill=%27%23F59E0B%27 font-family=%27Arial%27 font-size=%2718%27 font-weight=%27bold%27 text-anchor=%27middle%27%3EVU%3C/text%3E%3C/svg%3E'
                     ELSE logo_url
                 END
-                WHERE logo_url IS NULL;
+                WHERE logo_url IS NULL OR logo_url LIKE '%upload.wikimedia.org%';
 
                 UPDATE cities SET image_url = CASE city_code
                     WHEN 'HAN' THEN 'https://images.unsplash.com/photo-1583417319070-4a69db38a482?auto=format&fit=crop&w=800&q=80'
@@ -474,6 +469,446 @@ public class LargeDatasetSeeder {
                 SELECT setval(pg_get_serial_sequence('promotions', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM promotions), 1));
                 SELECT setval(pg_get_serial_sequence('vouchers', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM vouchers), 1));
                 SELECT setval(pg_get_serial_sequence('news_categories', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM news_categories), 1));
+                SELECT setval(pg_get_serial_sequence('users', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM users), 1));
+                SELECT setval(pg_get_serial_sequence('news_items', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM news_items), 1));
+                SELECT setval(pg_get_serial_sequence('promotion_scopes', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM promotion_scopes), 1));
+                SELECT setval(pg_get_serial_sequence('voucher_scopes', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM voucher_scopes), 1));
+                SELECT setval(pg_get_serial_sequence('user_vouchers', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM user_vouchers), 1));
+                SELECT setval(pg_get_serial_sequence('bookings', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM bookings), 1));
+                SELECT setval(pg_get_serial_sequence('booking_segments', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM booking_segments), 1));
+                SELECT setval(pg_get_serial_sequence('passengers', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM passengers), 1));
+                SELECT setval(pg_get_serial_sequence('booking_baggages', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM booking_baggages), 1));
+                SELECT setval(pg_get_serial_sequence('seat_holds', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM seat_holds), 1));
+                SELECT setval(pg_get_serial_sequence('payments', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM payments), 1));
+                SELECT setval(pg_get_serial_sequence('e_tickets', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM e_tickets), 1));
+                SELECT setval(pg_get_serial_sequence('notifications', 'id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM notifications), 1));
                 """);
+    }
+
+    /**
+     * Bổ sung đầy đủ dữ liệu cho mọi bảng & trường còn thiếu (idempotent):
+     * users (ADMIN/STAFF/CUSTOMER đủ phone & avatar), seat_types.color_hex,
+     * news_items + mapping, promotion_scopes, voucher_scopes, user_vouchers,
+     * bookings mẫu (CONFIRMED/PENDING_PAYMENT/CANCELLED) + payments + e_tickets + notifications.
+     */
+    private void seedSupplementaryFullData() {
+        seedSeatTypesColorAndUsers();
+        seedNewsAndPromotionVoucherScopes();
+        seedBookingsVouchersAndNotifications();
+        resetAllSequences();
+    }
+
+    private void seedSeatTypesColorAndUsers() {
+        jdbcTemplate.execute("""
+                UPDATE seat_types
+                SET color_hex = CASE seat_type_code
+                    WHEN 'ECO' THEN '#3B82F6'
+                    WHEN 'PREM_ECO' THEN '#0284C7'
+                    WHEN 'BUS' THEN '#F59E0B'
+                    ELSE color_hex
+                END
+                WHERE color_hex IS NULL OR TRIM(color_hex) = '';
+
+                UPDATE users
+                SET phone = COALESCE(NULLIF(TRIM(phone), ''), '0901234567'),
+                    avatar_url = COALESCE(NULLIF(TRIM(avatar_url), ''), 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=256&q=80')
+                WHERE email = 'admin@flightbooking.local' AND is_deleted = false;
+                """);
+
+        String staffHash = passwordEncoder.encode("Staff@12345");
+        String customerHash = passwordEncoder.encode("Customer@12345");
+
+        upsertUser("staff@flightbooking.local", staffHash, "Nguyễn Văn Điều Phối", "0912345678",
+                "https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&w=256&q=80", "STAFF");
+        upsertUser("customer@flightbooking.local", customerHash, "Nguyễn Minh Anh", "0987654321",
+                "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&q=80", "CUSTOMER");
+        upsertUser("minhhoang@vinafly.vn", customerHash, "Trần Minh Hoàng", "0934567890",
+                "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&q=80", "CUSTOMER");
+        upsertUser("thutrang@vinafly.vn", customerHash, "Lê Thu Trang", "0978123456",
+                "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=256&q=80", "CUSTOMER");
+    }
+
+    private void upsertUser(String email, String passwordHash, String fullName, String phone, String avatarUrl, String roleName) {
+        jdbcTemplate.update("""
+                INSERT INTO users (email, password_hash, full_name, phone, avatar_url, role_id, is_active, is_deleted)
+                SELECT ?, ?, ?, ?, ?, r.id, true, false
+                FROM roles r
+                WHERE r.name = ?
+                  AND NOT EXISTS (SELECT 1 FROM users u WHERE LOWER(u.email) = LOWER(?) AND u.is_deleted = false)
+                """, email, passwordHash, fullName, phone, avatarUrl, roleName, email);
+    }
+
+    private void seedNewsAndPromotionVoucherScopes() {
+        Long newsCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM news_items WHERE is_deleted = false", Long.class);
+        if (newsCount != null && newsCount == 0) {
+            jdbcTemplate.execute("""
+                    INSERT INTO news_items (title, content, thumbnail_url, published_at, status, is_deleted)
+                    VALUES
+                    ('Vietnam Airlines mở rộng tần suất đường bay vàng Hà Nội – TP. HCM mùa cao điểm',
+                     '<p>Vietnam Airlines tăng cường thêm nhiều chuyến bay mỗi ngày trên trục Hà Nội (HAN) – TP. Hồ Chí Minh (SGN) bằng tàu bay thân rộng Boeing 787-9 và Airbus A350-900.</p><ul><li>Giờ bay linh hoạt từ 05:30 đến 22:30 hàng ngày</li><li>Miễn phí 12kg hành lý xách tay cho hạng Phổ thông</li><li>Tích lũy dặm thưởng theo từng hạng vé</li></ul>',
+                     'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=800&q=80',
+                     now() - interval '3 days', 'PUBLISHED', false),
+                    ('Săn vé nội địa giờ vàng cuối tuần cùng VietJet Air và Bamboo Airways',
+                     '<p>Chương trình ưu đãi giá vé nội địa áp dụng cho toàn mạng bay kết nối Đà Nẵng, Phú Quốc, Nha Trang và Đà Lạt.</p><p>Hành khách đặt vé sớm trước 14 ngày được hưởng mức giá tiết kiệm cùng nhiều gói hành lý ký gửi linh hoạt.</p>',
+                     'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=800&q=80',
+                     now() - interval '2 days', 'PUBLISHED', false),
+                    ('Cẩm nang hành lý xách tay & ký gửi khi bay nội địa năm 2026',
+                     '<h3>1. Hành lý xách tay</h3><p>Mỗi hành khách Phổ thông được mang tối đa 7kg–12kg tùy hãng hàng không. Chất lỏng không vượt quá 100ml/chai.</p><h3>2. Hành lý ký gửi</h3><p>Quý khách nên mua trước gói hành lý 15kg, 20kg hoặc 30kg ngay tại bước nhập thông tin hành khách để tiết kiệm đến 40% so với mua tại sân bay.</p>',
+                     'https://images.unsplash.com/photo-1569154941061-e231b4725ef1?auto=format&fit=crop&w=800&q=80',
+                     now() - interval '1 day', 'PUBLISHED', false),
+                    ('Hướng dẫn chọn chỗ ngồi thoải mái trên dòng tàu bay Airbus A321neo',
+                     '<p>Hàng ghế thoát hiểm (hàng 12 và 14) có khoảng để chân rộng rãi hơn hẳn tiêu chuẩn. Ghế hàng đầu (hàng 7) giúp lên xuống máy bay nhanh chóng.</p>',
+                     'https://images.unsplash.com/photo-1540339832862-474599807836?auto=format&fit=crop&w=800&q=80',
+                     now() - interval '12 hours', 'PUBLISHED', false),
+                    ('Phú Quốc & Cam Ranh vào mùa đẹp nhất — Lịch bay thẳng tăng cường mỗi ngày',
+                     '<p>Từ Hà Nội, TP. Hồ Chí Minh và Đà Nẵng đều có nhiều khung giờ bay thẳng tới Phú Quốc (PQC) và Cam Ranh (CXR) chỉ trong 1 đến 2 giờ bay.</p>',
+                     'https://images.unsplash.com/photo-1528181304800-259b08848526?auto=format&fit=crop&w=800&q=80',
+                     now() - interval '6 hours', 'PUBLISHED', false),
+                    ('Bản nháp: Kế hoạch khai thác đường bay mới dịp lễ sắp tới',
+                     '<p>Bài viết nội bộ đang chờ biên tập viên rà soát trước khi xuất bản.</p>',
+                     'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=800&q=80',
+                     NULL, 'DRAFT', false);
+
+                    INSERT INTO news_category_mapping (news_id, category_id)
+                    SELECT n.id, c.id
+                    FROM news_items n
+                    JOIN news_categories c ON (
+                        (n.title LIKE '%Vietnam Airlines%' AND c.name = 'Tin hãng hàng không')
+                        OR (n.title LIKE '%giờ vàng%' AND c.name = 'Khuyến mãi & Ưu đãi')
+                        OR (n.title LIKE '%Cẩm nang%' AND c.name = 'Cẩm nang bay nội địa')
+                        OR (n.title LIKE '%chọn chỗ%' AND c.name = 'Cẩm nang bay nội địa')
+                        OR (n.title LIKE '%Phú Quốc%' AND c.name = 'Tin hãng hàng không')
+                        OR (n.title LIKE '%Bản nháp%' AND c.name = 'Tin hãng hàng không')
+                    )
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM news_category_mapping m WHERE m.news_id = n.id AND m.category_id = c.id
+                    );
+                    """);
+        }
+
+        Long promoScopeCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM promotion_scopes", Long.class);
+        if (promoScopeCount != null && promoScopeCount == 0) {
+            jdbcTemplate.execute("""
+                    INSERT INTO promotion_scopes (promotion_id, target_type, airline_id)
+                    SELECT p.id, 'AIRLINE', a.id
+                    FROM promotions p
+                    JOIN airlines a ON a.airline_code IN ('VN', 'VJ', 'QH')
+                    WHERE p.promotion_code = 'VINAFLY_TET2027' AND p.is_deleted = false AND a.is_deleted = false;
+
+                    INSERT INTO promotion_scopes (promotion_id, target_type, fare_class_id)
+                    SELECT p.id, 'FARE_CLASS', fc.id
+                    FROM promotions p
+                    JOIN fare_classes fc ON fc.seat_class IN ('BUSINESS', 'PREMIUM_ECONOMY')
+                    WHERE p.promotion_code = 'THUONG_GIA_UU_DAI' AND p.is_deleted = false AND fc.is_deleted = false;
+
+                    INSERT INTO promotion_scopes (promotion_id, target_type, departure_airport_id, arrival_airport_id)
+                    SELECT p.id, 'ROUTE', dep.id, arr.id
+                    FROM promotions p
+                    JOIN airports dep ON dep.airport_code = 'HAN'
+                    JOIN airports arr ON arr.airport_code = 'SGN'
+                    WHERE p.promotion_code = 'KHU_HOI_TIET_KIEM' AND p.is_deleted = false;
+                    """);
+        }
+
+        Long voucherScopeCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM voucher_scopes", Long.class);
+        if (voucherScopeCount != null && voucherScopeCount == 0) {
+            jdbcTemplate.execute("""
+                    INSERT INTO voucher_scopes (voucher_id, target_type, airline_id)
+                    SELECT v.id, 'AIRLINE', a.id
+                    FROM vouchers v
+                    JOIN airlines a ON a.is_deleted = false
+                    WHERE v.voucher_code = 'BAYHE2026' AND v.is_deleted = false;
+
+                    INSERT INTO voucher_scopes (voucher_id, target_type, departure_airport_id, arrival_airport_id)
+                    SELECT v.id, 'ROUTE', dep.id, arr.id
+                    FROM vouchers v
+                    JOIN airports dep ON dep.airport_code IN ('HAN', 'SGN')
+                    JOIN airports arr ON arr.airport_code IN ('SGN', 'HAN', 'DAD') AND arr.id <> dep.id
+                    WHERE v.voucher_code = 'KHUHOI500K' AND v.is_deleted = false;
+                    """);
+        }
+    }
+
+    private void seedBookingsVouchersAndNotifications() {
+        Long bookingCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM bookings", Long.class);
+        if (bookingCount != null && bookingCount == 0) {
+            jdbcTemplate.execute("""
+                    WITH sample_flights AS (
+                        SELECT f.id AS flight_id,
+                               f.airline_id,
+                               ff.fare_class_id,
+                               ff.base_fare,
+                               ff.tax_fee,
+                               (SELECT fr.id FROM fare_rules fr WHERE fr.fare_class_id = ff.fare_class_id AND fr.is_deleted = false ORDER BY fr.version DESC LIMIT 1) AS fare_rule_id,
+                               ROW_NUMBER() OVER (ORDER BY f.scheduled_departure ASC) AS rn
+                        FROM flights f
+                        JOIN flight_fares ff ON ff.flight_id = f.id
+                        JOIN fare_classes fc ON fc.id = ff.fare_class_id
+                        WHERE f.is_deleted = false
+                          AND f.sales_status = 'OPEN'
+                          AND f.operation_status = 'SCHEDULED'
+                          AND f.scheduled_departure >= CURRENT_DATE + INTERVAL '1 day'
+                          AND f.scheduled_departure < CURRENT_DATE + INTERVAL '6 days'
+                          AND fc.seat_class = 'ECONOMY'
+                          AND EXISTS (SELECT 1 FROM flight_seats fs WHERE fs.flight_id = f.id AND fs.status = 'AVAILABLE')
+                        LIMIT 6
+                    ),
+                    cust AS (
+                        SELECT
+                            (SELECT id FROM users WHERE email = 'customer@flightbooking.local' AND is_deleted = false LIMIT 1) AS u1,
+                            (SELECT id FROM users WHERE email = 'minhhoang@vinafly.vn' AND is_deleted = false LIMIT 1) AS u2,
+                            (SELECT id FROM users WHERE email = 'thutrang@vinafly.vn' AND is_deleted = false LIMIT 1) AS u3
+                    )
+                    INSERT INTO bookings (
+                        booking_code, user_id, trip_type, status,
+                        fare_amount, promotion_discount_amount, voucher_discount_amount, seat_surcharge_amount, baggage_amount, total_amount,
+                        currency, payment_expires_at, cancelled_at, cancel_reason, created_at, updated_at
+                    )
+                    SELECT v.code, v.uid, v.trip_type, v.status,
+                           v.fare_amt, v.promo_amt, v.voucher_amt, v.seat_amt, v.bag_amt,
+                           (v.fare_amt - v.promo_amt - v.voucher_amt + v.seat_amt + v.bag_amt),
+                           'VND', v.expires_at, v.cancelled_at, v.cancel_reason, v.created_at, v.created_at
+                    FROM cust c,
+                    (VALUES
+                        ('X7K2MP', (SELECT u1 FROM cust), 'ONE_WAY', 'CONFIRMED',
+                         2680000.00::numeric, 250000.00::numeric, 200000.00::numeric, 120000.00::numeric, 240000.00::numeric,
+                         now() - interval '2 days', NULL::timestamptz, NULL::text, now() - interval '2 days'),
+                        ('VN89PQ', (SELECT u1 FROM cust), 'ONE_WAY', 'PENDING_PAYMENT',
+                         1450000.00::numeric, 0.00::numeric, 0.00::numeric, 70000.00::numeric, 0.00::numeric,
+                         now() + interval '14 minutes', NULL::timestamptz, NULL::text, now()),
+                        ('QH45KL', (SELECT u1 FROM cust), 'ONE_WAY', 'CANCELLED',
+                         1820000.00::numeric, 0.00::numeric, 0.00::numeric, 0.00::numeric, 0.00::numeric,
+                         now() - interval '1 day', now() - interval '20 hours', 'Thay đổi kế hoạch công tác', now() - interval '1 day'),
+                        ('VJ31AB', (SELECT u2 FROM cust), 'ONE_WAY', 'CONFIRMED',
+                         3240000.00::numeric, 250000.00::numeric, 0.00::numeric, 70000.00::numeric, 180000.00::numeric,
+                         now() - interval '3 days', NULL::timestamptz, NULL::text, now() - interval '3 days'),
+                        ('BL77CD', (SELECT u3 FROM cust), 'ONE_WAY', 'CONFIRMED',
+                         1960000.00::numeric, 150000.00::numeric, 0.00::numeric, 0.00::numeric, 220000.00::numeric,
+                         now() - interval '6 hours', NULL::timestamptz, NULL::text, now() - interval '6 hours'),
+                        ('VU19EF', (SELECT u2 FROM cust), 'ONE_WAY', 'CONFIRMED',
+                         2150000.00::numeric, 0.00::numeric, 0.00::numeric, 120000.00::numeric, 0.00::numeric,
+                         now() - interval '1 hour', NULL::timestamptz, NULL::text, now() - interval '1 hour')
+                    ) AS v(code, uid, trip_type, status, fare_amt, promo_amt, voucher_amt, seat_amt, bag_amt, expires_at, cancelled_at, cancel_reason, created_at)
+                    WHERE v.uid IS NOT NULL;
+                    """);
+
+            // Gắn chặng bay cho các đơn đặt vé mẫu
+            jdbcTemplate.execute("""
+                    WITH booked AS (
+                        SELECT id, booking_code, fare_amount, promotion_discount_amount,
+                               ROW_NUMBER() OVER (ORDER BY id) AS rn
+                        FROM bookings
+                    ),
+                    sf AS (
+                        SELECT f.id AS flight_id,
+                               ff.fare_class_id,
+                               (SELECT fr.id FROM fare_rules fr WHERE fr.fare_class_id = ff.fare_class_id AND fr.is_deleted = false ORDER BY fr.version DESC LIMIT 1) AS fare_rule_id,
+                               ROW_NUMBER() OVER (ORDER BY f.scheduled_departure ASC) AS rn
+                        FROM flights f
+                        JOIN flight_fares ff ON ff.flight_id = f.id
+                        JOIN fare_classes fc ON fc.id = ff.fare_class_id
+                        WHERE f.is_deleted = false
+                          AND f.sales_status = 'OPEN'
+                          AND f.operation_status = 'SCHEDULED'
+                          AND f.scheduled_departure >= CURRENT_DATE + INTERVAL '1 day'
+                          AND f.scheduled_departure < CURRENT_DATE + INTERVAL '6 days'
+                          AND fc.seat_class = 'ECONOMY'
+                        LIMIT 6
+                    )
+                    INSERT INTO booking_segments (
+                        booking_id, flight_id, fare_class_id, fare_rule_id,
+                        segment_order, fare_amount_at_booking, promotion_discount_amount, currency
+                    )
+                    SELECT b.id, s.flight_id, s.fare_class_id, s.fare_rule_id,
+                           1, b.fare_amount, b.promotion_discount_amount, 'VND'
+                    FROM booked b
+                    JOIN sf s ON s.rn = b.rn
+                    WHERE s.fare_rule_id IS NOT NULL;
+                    """);
+
+            // Sinh hành khách cho 6 đơn đặt vé
+            jdbcTemplate.execute("""
+                    INSERT INTO passengers (booking_id, full_name, gender, birth_date, passenger_type, passport_number, phone, email)
+                    SELECT b.id,
+                           CASE b.booking_code
+                               WHEN 'X7K2MP' THEN 'Nguyễn Minh Anh'
+                               WHEN 'VN89PQ' THEN 'Nguyễn Minh Anh'
+                               WHEN 'QH45KL' THEN 'Nguyễn Minh Anh'
+                               WHEN 'VJ31AB' THEN 'Trần Minh Hoàng'
+                               WHEN 'BL77CD' THEN 'Lê Thu Trang'
+                               ELSE 'Phạm Quốc Bảo'
+                           END,
+                           CASE WHEN b.booking_code IN ('VJ31AB', 'VU19EF') THEN 'MALE' ELSE 'FEMALE' END,
+                           DATE '1994-05-16',
+                           'ADULT',
+                           '001194012345',
+                           '0987654321',
+                           u.email
+                    FROM bookings b
+                    JOIN users u ON u.id = b.user_id;
+
+                    -- Thêm 1 trẻ em cho đơn X7K2MP để test đa hành khách
+                    INSERT INTO passengers (booking_id, full_name, gender, birth_date, passenger_type, passport_number, phone, email)
+                    SELECT b.id, 'Nguyễn Bảo An', 'MALE', DATE '2019-08-20', 'CHILD', NULL, NULL, NULL
+                    FROM bookings b WHERE b.booking_code = 'X7K2MP';
+                    """);
+
+            // Sinh giao dịch thanh toán & vé điện tử cho các đơn CONFIRMED
+            jdbcTemplate.execute("""
+                    INSERT INTO payments (booking_id, amount, currency, payment_method, gateway_name, gateway_transaction_id, status, retry_count, created_at, paid_at)
+                    SELECT b.id, b.total_amount, 'VND',
+                           CASE WHEN b.id % 2 = 0 THEN 'PAYOS' ELSE 'VNPAY' END,
+                           CASE WHEN b.id % 2 = 0 THEN 'PAYOS' ELSE 'VNPAY' END,
+                           'TXN-' || b.booking_code || '-' || b.id,
+                           'SUCCESS', 0, b.created_at, b.created_at + interval '2 minutes'
+                    FROM bookings b
+                    WHERE b.status = 'CONFIRMED';
+
+                    INSERT INTO e_tickets (booking_id, booking_segment_id, passenger_id, ticket_code, issued_at, status)
+                    SELECT b.id, bs.id, p.id,
+                           '738-' || LPAD((1000000 + p.id)::text, 10, '0'),
+                           b.created_at + interval '2 minutes',
+                           'ISSUED'
+                    FROM bookings b
+                    JOIN booking_segments bs ON bs.booking_id = b.id
+                    JOIN passengers p ON p.booking_id = b.id
+                    WHERE b.status = 'CONFIRMED';
+
+                    -- Gắn gói hành lý ký gửi cho các đơn có baggage_amount > 0
+                    INSERT INTO booking_baggages (booking_id, passenger_id, baggage_option_id, quantity, unit_price_at_booking, currency)
+                    SELECT b.id,
+                           (SELECT p.id FROM passengers p WHERE p.booking_id = b.id ORDER BY p.id LIMIT 1),
+                           bo.id,
+                           1,
+                           bo.price,
+                           'VND'
+                    FROM bookings b
+                    JOIN booking_segments bs ON bs.booking_id = b.id
+                    JOIN flights f ON f.id = bs.flight_id
+                    JOIN LATERAL (
+                        SELECT id, price FROM baggage_options
+                        WHERE airline_id = f.airline_id AND is_deleted = false AND is_active = true
+                        ORDER BY weight_kg ASC LIMIT 1
+                    ) bo ON true
+                    WHERE b.baggage_amount > 0;
+
+                    -- Gắn ghế giữ cho đơn PENDING_PAYMENT (VN89PQ) và CONFIRMED (X7K2MP)
+                    WITH target_holds AS (
+                        SELECT b.id AS booking_id,
+                               b.status AS booking_status,
+                               b.payment_expires_at,
+                               p.id AS passenger_id,
+                               bs.flight_id,
+                               ROW_NUMBER() OVER (PARTITION BY bs.flight_id ORDER BY p.id) AS seat_rn
+                        FROM bookings b
+                        JOIN booking_segments bs ON bs.booking_id = b.id
+                        JOIN passengers p ON p.booking_id = b.id
+                        WHERE b.booking_code IN ('X7K2MP', 'VN89PQ')
+                    ),
+                    picked_seats AS (
+                        SELECT th.booking_id,
+                               th.booking_status,
+                               th.payment_expires_at,
+                               th.passenger_id,
+                               fs.id AS flight_seat_id,
+                               fs.seat_surcharge
+                        FROM target_holds th
+                        JOIN LATERAL (
+                            SELECT fseat.id, fseat.seat_surcharge
+                            FROM flight_seats fseat
+                            JOIN aircraft_seats acs ON acs.id = fseat.aircraft_seat_id
+                            JOIN seat_types st ON st.id = acs.seat_type_id
+                            WHERE fseat.flight_id = th.flight_id
+                              AND fseat.status = 'AVAILABLE'
+                              AND st.seat_class = 'ECONOMY'
+                            ORDER BY fseat.id ASC
+                            OFFSET (th.seat_rn - 1) LIMIT 1
+                        ) fs ON true
+                    )
+                    INSERT INTO seat_holds (booking_id, flight_seat_id, hold_expires_at, status, passenger_id, surcharge_at_booking)
+                    SELECT ps.booking_id, ps.flight_seat_id, ps.payment_expires_at,
+                           CASE WHEN ps.booking_status = 'CONFIRMED' THEN 'CONFIRMED' ELSE 'HOLD' END,
+                           ps.passenger_id, ps.seat_surcharge
+                    FROM picked_seats ps
+                    ON CONFLICT DO NOTHING;
+
+                    UPDATE flight_seats fs
+                    SET status = CASE WHEN sh.status = 'CONFIRMED' THEN 'BOOKED' ELSE 'HOLD' END
+                    FROM seat_holds sh
+                    WHERE sh.flight_seat_id = fs.id
+                      AND sh.status IN ('HOLD', 'CONFIRMED')
+                      AND fs.status = 'AVAILABLE';
+                    """);
+        }
+
+        // Seed user_vouchers cho customer@flightbooking.local
+        Long uvCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM user_vouchers", Long.class);
+        if (uvCount != null && uvCount == 0) {
+            jdbcTemplate.execute("""
+                    INSERT INTO user_vouchers (user_id, voucher_id, status, received_at, used_at, expires_at, booking_id, discount_amount, source)
+                    SELECT u.id, v.id,
+                           CASE v.voucher_code
+                               WHEN 'KHUHOI500K' THEN 'USED'
+                               ELSE 'AVAILABLE'
+                           END,
+                           now() - interval '5 days',
+                           CASE WHEN v.voucher_code = 'KHUHOI500K' THEN now() - interval '2 days' ELSE NULL END,
+                           v.end_date::timestamptz,
+                           CASE WHEN v.voucher_code = 'KHUHOI500K' THEN (SELECT id FROM bookings WHERE booking_code = 'X7K2MP' LIMIT 1) ELSE NULL END,
+                           CASE WHEN v.voucher_code = 'KHUHOI500K' THEN 200000.00::numeric ELSE NULL END,
+                           'CLAIMED'
+                    FROM users u
+                    JOIN vouchers v ON v.is_deleted = false
+                    WHERE u.email = 'customer@flightbooking.local' AND u.is_deleted = false
+                    ON CONFLICT DO NOTHING;
+                    """);
+        }
+
+        // Seed notifications mẫu cho Admin, Staff và Customer
+        Long notiCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM notifications", Long.class);
+        if (notiCount != null && notiCount == 0) {
+            jdbcTemplate.execute("""
+                    INSERT INTO notifications (user_id, type, title, body, link_url, is_read, dedupe_key)
+                    SELECT u.id, 'BOOKING_CONFIRMED',
+                           'Đơn đặt chỗ X7K2MP đã được xác nhận',
+                           'Thanh toán thành công và vé điện tử đã được phát hành qua email.',
+                           '/account', false, 'seed:cust:booking:X7K2MP'
+                    FROM users u WHERE u.email = 'customer@flightbooking.local' AND u.is_deleted = false
+                    ON CONFLICT DO NOTHING;
+
+                    INSERT INTO notifications (user_id, type, title, body, link_url, is_read, dedupe_key)
+                    SELECT u.id, 'BOOKING_PAYMENT_EXPIRING',
+                           'Đơn VN89PQ đang chờ thanh toán',
+                           'Vui lòng hoàn tất thanh toán trước khi hết hạn giữ chỗ 15 phút.',
+                           '/account', false, 'seed:cust:expiring:VN89PQ'
+                    FROM users u WHERE u.email = 'customer@flightbooking.local' AND u.is_deleted = false
+                    ON CONFLICT DO NOTHING;
+
+                    INSERT INTO notifications (user_id, type, title, body, link_url, is_read, dedupe_key)
+                    SELECT u.id, 'VOUCHER_ASSIGNED',
+                           'Bạn vừa nhận voucher BAYHE2026',
+                           'Giảm 200.000đ cho chuyến bay nội địa từ 1.500.000đ.',
+                           '/account/vouchers', true, 'seed:cust:voucher:BAYHE2026'
+                    FROM users u WHERE u.email = 'customer@flightbooking.local' AND u.is_deleted = false
+                    ON CONFLICT DO NOTHING;
+
+                    INSERT INTO notifications (user_id, type, title, body, link_url, is_read, dedupe_key)
+                    SELECT u.id, 'BOOKING_CONFIRMED',
+                           'Hệ thống ghi nhận 4 đơn xác nhận mới',
+                           'Kiểm tra doanh thu và tình trạng lấp đầy trên Dashboard tổng quan.',
+                           '/admin/bookings', false, 'seed:admin:bookings'
+                    FROM users u WHERE u.email IN ('admin@flightbooking.local', 'staff@flightbooking.local') AND u.is_deleted = false
+                    ON CONFLICT DO NOTHING;
+
+                    INSERT INTO notifications (user_id, type, title, body, link_url, is_read, dedupe_key)
+                    SELECT u.id, 'BOOKING_CANCELLED',
+                           'Đơn QH45KL đã được hủy theo yêu cầu khách',
+                           'Khách hàng Nguyễn Minh Anh hủy đơn đặt chỗ do thay đổi kế hoạch.',
+                           '/admin/bookings', false, 'seed:admin:cancelled:QH45KL'
+                    FROM users u WHERE u.email IN ('admin@flightbooking.local', 'staff@flightbooking.local') AND u.is_deleted = false
+                    ON CONFLICT DO NOTHING;
+                    """);
+        }
+        log.info("Đã hoàn tất kiểm tra và bổ sung đầy đủ dữ liệu mẫu (users, news, scopes, bookings, payments, e_tickets, notifications).");
     }
 }

@@ -271,6 +271,20 @@ class BookingServiceTest {
         assertThat(res.agencyContact().supportEmail()).isEqualTo("hotro@vinafly.vn");
     }
 
+    @Test
+    void lookupPublic_saiEmail_nemResourceNotFound() {
+        User u = user(1L);
+        Booking booking = new Booking();
+        booking.setId(1049L);
+        booking.setBookingCode("X7K2MP");
+        booking.setUser(u);
+
+        when(bookingRepository.findWithUserByBookingCodeIgnoreCase("X7K2MP")).thenReturn(Optional.of(booking));
+
+        assertThatThrownBy(() -> service.lookupPublic("X7K2MP", "other@example.com"))
+                .isInstanceOf(com.example.domesticflightbookingwebbackend.exception.ResourceNotFoundException.class);
+    }
+
     private User user(Long id) {
         User u = new User();
         u.setId(id);

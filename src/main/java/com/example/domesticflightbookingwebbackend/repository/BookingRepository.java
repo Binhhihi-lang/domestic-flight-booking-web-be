@@ -18,6 +18,9 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
     boolean existsByBookingCode(String bookingCode);
 
     @EntityGraph(attributePaths = "user")
+    Optional<Booking> findWithUserByBookingCodeIgnoreCase(String bookingCode);
+
+    @EntityGraph(attributePaths = "user")
     Optional<Booking> findWithUserById(Long id);
 
     @Override

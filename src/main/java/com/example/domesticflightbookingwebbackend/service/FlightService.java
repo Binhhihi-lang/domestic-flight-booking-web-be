@@ -30,6 +30,8 @@ import com.example.domesticflightbookingwebbackend.repository.BookingSegmentRepo
 import com.example.domesticflightbookingwebbackend.repository.FlightFareRepository;
 import com.example.domesticflightbookingwebbackend.repository.FlightRepository;
 import com.example.domesticflightbookingwebbackend.repository.FlightSeatRepository;
+import com.example.domesticflightbookingwebbackend.repository.PassengerRepository;
+import com.example.domesticflightbookingwebbackend.repository.SeatHoldRepository;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -81,10 +83,22 @@ public class FlightService {
     private final SeatInventoryService seatInventoryService;
     private final FlightMapper flightMapper;
     private NotificationService notificationService;
+    private PassengerRepository passengerRepository;
+    private SeatHoldRepository seatHoldRepository;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setNotificationService(NotificationService notificationService) {
         this.notificationService = notificationService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setPassengerRepository(PassengerRepository passengerRepository) {
+        this.passengerRepository = passengerRepository;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSeatHoldRepository(SeatHoldRepository seatHoldRepository) {
+        this.seatHoldRepository = seatHoldRepository;
     }
 
     /**
@@ -154,7 +168,7 @@ public class FlightService {
         return PageMapper.toPageData(page, flightMapper::toResponse);
     }
 
-    /** Chi tiết chuyến bay công khai cho khách (chỉ chuyến OPEN và chưa hủy). */
+    /** Chi tiết chuyến bay công khai cho khách (chỉ chuyến OPEN và chưa hủy — không lộ danh sách hành khách). */
     @Transactional(readOnly = true)
     public FlightDetailResponse getPublicById(Long id) {
         Flight flight = findOrThrow(id);
@@ -162,7 +176,7 @@ public class FlightService {
                 || flight.getOperationStatus() == FlightOperationStatus.CANCELLED) {
             throw new ResourceNotFoundException("Chuyến bay không tồn tại");
         }
-        return buildDetailResponse(flight);
+        return buildDetailResponse(flight, false);
     }
 
     /** Danh sách chuyến bay cho màn quản trị (ADMIN/STAFF). */
@@ -183,11 +197,11 @@ public class FlightService {
         return PageMapper.toPageData(page, flightMapper::toResponse);
     }
 
-    /** Chi tiết chuyến bay cho màn quản trị (ADMIN/STAFF). */
+    /** Chi tiết chuyến bay cho màn quản trị (ADMIN/STAFF — kèm danh sách hành khách). */
     @Transactional(readOnly = true)
     public FlightDetailResponse getById(Long id) {
         Flight flight = findOrThrow(id);
-        return buildDetailResponse(flight);
+        return buildDetailResponse(flight, true);
     }
 
     @Transactional
@@ -342,12 +356,73 @@ public class FlightService {
                 .orElseThrow(() -> new ResourceNotFoundException("Chuyến bay không tồn tại"));
     }
 
-    private FlightDetailResponse buildDetailResponse(Flight flight) {
+    private FlightDetailResponse buildDetailResponse(Flight flight, boolean includePassengers) {
         long totalSeats = flightSeatRepository.countByFlightId(flight.getId());
         long availableSeats = flightSeatRepository.countByFlightIdAndStatus(
                 flight.getId(), FlightSeatStatus.AVAILABLE);
         List<PricedFareResponse> fares = flightFareService.getPricedFares(flight.getId());
-        return flightMapper.toDetailResponse(flight, totalSeats, availableSeats, fares);
+        List<FlightDetailResponse.FlightPassengerItem> passengers =
+                includePassengers ? loadFlightPassengers(flight.getId()) : List.of();
+        return flightMapper.toDetailResponse(flight, totalSeats, availableSeats, fares, passengers);
+    }
+
+    private List<FlightDetailResponse.FlightPassengerItem> loadFlightPassengers(Long flightId) {
+        if (passengerRepository == null) {
+            return List.of();
+        }
+        List<com.example.domesticflightbookingwebbackend.entity.BookingSegment> segments =
+                bookingSegmentRepository.findByFlightId(flightId);
+        if (segments.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> bookingIds = segments.stream()
+                .map(s -> s.getBooking().getId())
+                .distinct()
+                .toList();
+
+        Map<Long, List<com.example.domesticflightbookingwebbackend.entity.Passenger>> passengersByBooking =
+                new java.util.HashMap<>();
+        for (var p : passengerRepository.findByBookingIdInOrderByIdAsc(bookingIds)) {
+            passengersByBooking.computeIfAbsent(p.getBooking().getId(), k -> new ArrayList<>()).add(p);
+        }
+
+        Map<Long, String> seatByPassenger = new java.util.HashMap<>();
+        if (seatHoldRepository != null) {
+            List<com.example.domesticflightbookingwebbackend.entity.SeatHold> holds =
+                    seatHoldRepository.findByBookingIdInAndStatusIn(
+                            bookingIds,
+                            List.of(com.example.domesticflightbookingwebbackend.entity.SeatHoldStatus.HOLD,
+                                    com.example.domesticflightbookingwebbackend.entity.SeatHoldStatus.CONFIRMED));
+            for (var h : holds) {
+                if (h.getFlightSeat() != null && h.getFlightSeat().getFlight().getId().equals(flightId)) {
+                    seatByPassenger.put(h.getPassenger().getId(), h.getFlightSeat().getSeatCode());
+                }
+            }
+        }
+
+        List<FlightDetailResponse.FlightPassengerItem> result = new ArrayList<>();
+        for (var seg : segments) {
+            var b = seg.getBooking();
+            String orderCode = "DH-" + b.getId();
+            String pnrCode = b.getStatus() == com.example.domesticflightbookingwebbackend.entity.BookingStatus.CONFIRMED
+                    ? b.getBookingCode()
+                    : null;
+            String fareName = seg.getFareClass() != null ? seg.getFareClass().getFareClassName() : "";
+            for (var p : passengersByBooking.getOrDefault(b.getId(), List.of())) {
+                result.add(new FlightDetailResponse.FlightPassengerItem(
+                        orderCode,
+                        pnrCode,
+                        p.getFullName(),
+                        p.getPassengerType().name(),
+                        seatByPassenger.get(p.getId()),
+                        fareName,
+                        b.getStatus().name(),
+                        b.getStatus() == com.example.domesticflightbookingwebbackend.entity.BookingStatus.CONFIRMED
+                ));
+            }
+        }
+        return result;
     }
 
     private void validateRouteAndSchedule(FlightRequest request) {

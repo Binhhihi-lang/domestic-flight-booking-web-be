@@ -54,6 +54,15 @@ public class FlightMapper {
             long totalSeats,
             long availableSeats,
             List<PricedFareResponse> fares) {
+        return toDetailResponse(flight, totalSeats, availableSeats, fares, List.of());
+    }
+
+    public FlightDetailResponse toDetailResponse(
+            Flight flight,
+            long totalSeats,
+            long availableSeats,
+            List<PricedFareResponse> fares,
+            List<FlightDetailResponse.FlightPassengerItem> passengers) {
         Flight parent = flight.getParentFlight();
         return new FlightDetailResponse(
                 flight.getId(),
@@ -72,6 +81,7 @@ public class FlightMapper {
                 totalSeats,
                 availableSeats,
                 fares,
+                passengers == null ? List.of() : passengers,
                 flight.getCreatedAt(),
                 flight.getUpdatedAt()
         );

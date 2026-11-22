@@ -10,6 +10,7 @@ import com.example.domesticflightbookingwebbackend.entity.Airport;
 import com.example.domesticflightbookingwebbackend.entity.City;
 import com.example.domesticflightbookingwebbackend.entity.Flight;
 import com.example.domesticflightbookingwebbackend.entity.FlightOperationStatus;
+import com.example.domesticflightbookingwebbackend.entity.FlightSeatStatus;
 import com.example.domesticflightbookingwebbackend.entity.SalesStatus;
 import com.example.domesticflightbookingwebbackend.entity.TripType;
 import com.example.domesticflightbookingwebbackend.exception.BusinessException;
@@ -245,6 +246,20 @@ class FlightServiceTest {
         assertThat(item.fares()).hasSize(1);
         assertThat(item.lowestAdultPrice()).isEqualByComparingTo("890000");
         assertThat(item.lowestFareClassCode()).isEqualTo("VN_ECON_SAVER");
+    }
+
+    @Test
+    void getPublicById_khongLoDanhSachHanhKhach() {
+        Flight flight = existingFlight(55L, "VN165");
+        flight.setSalesStatus(SalesStatus.OPEN);
+        flight.setOperationStatus(FlightOperationStatus.SCHEDULED);
+        when(flightRepository.findWithDetailsById(55L)).thenReturn(Optional.of(flight));
+        when(flightSeatRepository.countByFlightId(55L)).thenReturn(180L);
+        when(flightSeatRepository.countByFlightIdAndStatus(55L, FlightSeatStatus.AVAILABLE)).thenReturn(150L);
+        when(flightFareService.getPricedFares(55L)).thenReturn(List.of());
+
+        var detail = service.getPublicById(55L);
+        assertThat(detail.passengers()).isEmpty();
     }
 
     private Flight existingFlight(Long id, String number) {
