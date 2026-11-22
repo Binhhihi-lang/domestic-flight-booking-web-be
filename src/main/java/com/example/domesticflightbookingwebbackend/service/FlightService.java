@@ -165,7 +165,7 @@ public class FlightService {
                 query, airlineId, departureAirportId, arrivalAirportId, departureDate,
                 null, SalesStatus.OPEN.name(), true);
         Page<Flight> page = flightRepository.findAll(spec, pageable);
-        return PageMapper.toPageData(page, flightMapper::toResponse);
+        return toPageDataWithSeatSummary(page);
     }
 
     /** Chi tiết chuyến bay công khai cho khách (chỉ chuyến OPEN và chưa hủy — không lộ danh sách hành khách). */
@@ -194,7 +194,36 @@ public class FlightService {
                 query, airlineId, departureAirportId, arrivalAirportId, departureDate,
                 operationStatus, salesStatus, false);
         Page<Flight> page = flightRepository.findAll(spec, pageable);
-        return PageMapper.toPageData(page, flightMapper::toResponse);
+        return toPageDataWithSeatSummary(page);
+    }
+
+    /**
+     * Nạp tổng ghế & ghế còn trống cho toàn bộ trang kết quả bằng ĐÚNG 1 câu query GROUP BY
+     * trên {@link FlightSeatRepository} (chống N+1); chuyến chưa sinh tồn ghế fallback theo sức chứa máy bay.
+     */
+    private PageData<FlightResponse> toPageDataWithSeatSummary(Page<Flight> page) {
+        List<Flight> content = page.getContent();
+        if (content.isEmpty()) {
+            return PageMapper.toPageData(page, flightMapper::toResponse);
+        }
+        List<Long> flightIds = content.stream().map(Flight::getId).toList();
+        Map<Long, FlightSeatRepository.FlightSeatSummary> summaryByFlightId = new java.util.HashMap<>();
+        List<FlightSeatRepository.FlightSeatSummary> rows = flightSeatRepository.summarizeSeatsByFlightIds(flightIds);
+        if (rows != null) {
+            for (FlightSeatRepository.FlightSeatSummary row : rows) {
+                summaryByFlightId.put(row.getFlightId(), row);
+            }
+        }
+        return PageMapper.toPageData(page, flight -> {
+            FlightSeatRepository.FlightSeatSummary summary = summaryByFlightId.get(flight.getId());
+            Integer fallbackCap = flight.getAircraft() != null ? flight.getAircraft().getSeatCapacity() : 0;
+            if (summary != null && summary.getTotalSeats() != null && summary.getTotalSeats() > 0) {
+                int cap = summary.getTotalSeats().intValue();
+                int avail = summary.getAvailableSeats() == null ? 0 : summary.getAvailableSeats().intValue();
+                return flightMapper.toResponse(flight, cap, avail);
+            }
+            return flightMapper.toResponse(flight, fallbackCap, fallbackCap);
+        });
     }
 
     /** Chi tiết chuyến bay cho màn quản trị (ADMIN/STAFF — kèm danh sách hành khách). */

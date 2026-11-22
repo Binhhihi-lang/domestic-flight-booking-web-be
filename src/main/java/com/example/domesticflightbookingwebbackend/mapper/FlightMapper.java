@@ -29,7 +29,15 @@ public class FlightMapper {
     private final AirportMapper airportMapper;
 
     public FlightResponse toResponse(Flight flight) {
+        Integer fallbackCap = flight.getAircraft() != null ? flight.getAircraft().getSeatCapacity() : null;
+        return toResponse(flight, fallbackCap, fallbackCap);
+    }
+
+    public FlightResponse toResponse(Flight flight, Integer seatCapacity, Integer availableSeats) {
         Flight parent = flight.getParentFlight();
+        Integer effectiveCap = seatCapacity != null
+                ? seatCapacity
+                : (flight.getAircraft() != null ? flight.getAircraft().getSeatCapacity() : null);
         return new FlightResponse(
                 flight.getId(),
                 flight.getFlightNumber(),
@@ -44,6 +52,8 @@ public class FlightMapper {
                 flight.getSalesStatus().name(),
                 parent == null ? null : parent.getId(),
                 parent == null ? null : parent.getFlightNumber(),
+                effectiveCap,
+                availableSeats,
                 flight.getCreatedAt(),
                 flight.getUpdatedAt()
         );

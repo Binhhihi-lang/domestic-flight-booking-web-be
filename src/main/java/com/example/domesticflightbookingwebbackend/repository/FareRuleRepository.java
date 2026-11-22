@@ -54,4 +54,23 @@ public interface FareRuleRepository extends JpaRepository<FareRule, Long>, JpaSp
     List<FareRule> findActiveRulesByFareClassIds(
             @Param("fareClassIds") Collection<Long> fareClassIds,
             @Param("now") LocalDateTime now);
+
+    /** Lấy toàn bộ quy định hoàn vé đang hiệu lực của các hạng vé ACTIVE cho API công khai (JOIN FETCH chống N+1). */
+    @Query("""
+            SELECT r FROM FareRule r
+            JOIN FETCH r.fareClass fc
+            JOIN FETCH fc.airline a
+            WHERE r.isDeleted = false
+              AND r.isActive = true
+              AND r.effectiveFrom <= :now
+              AND fc.isDeleted = false
+              AND fc.isActive = true
+              AND a.isDeleted = false
+              AND a.isActive = true
+              AND (:airlineId IS NULL OR a.id = :airlineId)
+            ORDER BY a.airlineCode ASC, fc.fareClassCode ASC, r.version DESC
+            """)
+    List<FareRule> findAllActivePublicRules(
+            @Param("airlineId") Long airlineId,
+            @Param("now") LocalDateTime now);
 }

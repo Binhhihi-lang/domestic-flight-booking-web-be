@@ -102,7 +102,7 @@ public class NewsCategoryService extends BaseCrudService<NewsCategory, Long, New
     @Override
     protected Page<NewsCategory> search(ListQuery query, Map<String, String> filters) {
         Pageable pageable = PageMapper.toPageable(query, "name", SORT_WHITELIST);
-        return categoryRepository.findAll(buildSpec(query), pageable);
+        return categoryRepository.findAll(buildSpec(query, filters), pageable);
     }
 
     /**
@@ -124,10 +124,16 @@ public class NewsCategoryService extends BaseCrudService<NewsCategory, Long, New
     public record NewsCategoryBrief(Long id, String name) {
     }
 
-    private Specification<NewsCategory> buildSpec(ListQuery query) {
+    private Specification<NewsCategory> buildSpec(ListQuery query, Map<String, String> filters) {
         return (root, cq, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.isFalse(root.get("isDeleted")));   // BR-LIST-04
+
+            Map<String, String> safeFilters = filters == null ? Map.of() : filters;
+            String status = safeFilters.get("status");
+            if (status != null) {
+                predicates.add(cb.equal(root.get("isActive"), "ACTIVE".equalsIgnoreCase(status)));
+            }
 
             String keyword = query.getKeywordOrNull();
             if (keyword != null) {

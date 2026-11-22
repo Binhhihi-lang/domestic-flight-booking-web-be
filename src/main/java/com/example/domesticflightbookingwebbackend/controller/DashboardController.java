@@ -42,7 +42,10 @@ public class DashboardController {
             @RequestParam(name = "from_date", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam(name = "to_date", required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
-        return ApiResponse.success(dashboardService.overview(fromDate, toDate));
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(name = "airline_id", required = false) Long airlineId,
+            @RequestParam(name = "route", required = false) String route,
+            @RequestParam(name = "days", required = false) Integer days) {
+        return ApiResponse.success(dashboardService.overview(fromDate, toDate, airlineId, route, days));
     }
 }

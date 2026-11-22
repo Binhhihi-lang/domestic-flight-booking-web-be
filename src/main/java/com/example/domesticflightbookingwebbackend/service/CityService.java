@@ -118,7 +118,12 @@ public class CityService extends BaseCrudService<City, Long, CityRequest, CityRe
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.isFalse(root.get("isDeleted")));   // BR-LIST-04
 
-            String country = filters.get("country");
+            Map<String, String> safeFilters = filters == null ? Map.of() : filters;
+            String status = safeFilters.get("status");
+            if (status != null) {
+                predicates.add(cb.equal(root.get("isActive"), "ACTIVE".equalsIgnoreCase(status)));
+            }
+            String country = safeFilters.get("country");
             if (country != null) {
                 predicates.add(cb.equal(cb.lower(root.get("country")), country.toLowerCase()));
             }

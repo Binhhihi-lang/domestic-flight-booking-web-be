@@ -72,6 +72,23 @@ public interface FlightSeatRepository extends JpaRepository<FlightSeat, Long> {
         Long getSeatCount();
     }
 
+    /** Tổng hợp tổng số ghế & số ghế còn trống cho một trang chuyến bay trong 1 câu GROUP BY (chống N+1). */
+    @Query("""
+            SELECT fs.flight.id AS flightId,
+                   COUNT(fs.id) AS totalSeats,
+                   SUM(CASE WHEN fs.status = com.example.domesticflightbookingwebbackend.entity.FlightSeatStatus.AVAILABLE THEN 1L ELSE 0L END) AS availableSeats
+            FROM FlightSeat fs
+            WHERE fs.flight.id IN :flightIds
+            GROUP BY fs.flight.id
+            """)
+    List<FlightSeatSummary> summarizeSeatsByFlightIds(@Param("flightIds") Collection<Long> flightIds);
+
+    interface FlightSeatSummary {
+        Long getFlightId();
+        Long getTotalSeats();
+        Long getAvailableSeats();
+    }
+
     /**
      * Khóa ghế nguyên tử chống tranh chấp (DB v0.5 mục 5.2):
      * chỉ đổi sang HOLD và tăng version nếu ghế đang AVAILABLE.

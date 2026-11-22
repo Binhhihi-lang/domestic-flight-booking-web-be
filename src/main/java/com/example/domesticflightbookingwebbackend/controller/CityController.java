@@ -36,8 +36,9 @@ public class CityController extends BaseCrudController<City, Long, CityRequest, 
     @PreAuthorize("hasAuthority('CITY_READ')")
     public ApiResponse<PageData<CityResponse>> list(
             ListQuery query,
-            @RequestParam(required = false) String country) {
-        return list(query, filters("country", country));
+            @RequestParam(required = false) String country,
+            @RequestParam(required = false) String status) {
+        return list(query, filters("country", country, "status", status));
     }
 
     /** GET detail công khai (P — CITY_READ_DETAIL). */

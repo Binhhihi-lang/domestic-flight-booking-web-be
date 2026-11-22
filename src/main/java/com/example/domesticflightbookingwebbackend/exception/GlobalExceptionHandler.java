@@ -13,6 +13,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -56,6 +57,14 @@ public class GlobalExceptionHandler {
         log.warn("Bad request: {}", ex.getMessage());
         return ResponseEntity.status(ErrorCode.VALIDATION_ERROR.getHttpStatus())
                 .body(ApiResponse.error(ErrorCode.VALIDATION_ERROR, "Tham số yêu cầu không hợp lệ"));
+    }
+
+    /** File tải lên vượt quá dung lượng cho phép của multipart servlet. */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
+        log.warn("Upload file vượt giới hạn kích thước: {}", ex.getMessage());
+        return ResponseEntity.status(ErrorCode.VALIDATION_ERROR.getHttpStatus())
+                .body(ApiResponse.error(ErrorCode.VALIDATION_ERROR, "Kích thước ảnh không được vượt quá 5MB"));
     }
 
     /** Body JSON sai định dạng / không đọc được. */

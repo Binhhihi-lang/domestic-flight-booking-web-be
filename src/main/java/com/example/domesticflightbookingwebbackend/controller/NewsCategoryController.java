@@ -35,8 +35,10 @@ public class NewsCategoryController
 
     @GetMapping
     @PreAuthorize("hasAuthority('NEWS_CATEGORY_READ')")
-    public ApiResponse<PageData<NewsCategoryResponse>> list(ListQuery query) {
-        return list(query, filters());
+    public ApiResponse<PageData<NewsCategoryResponse>> list(
+            ListQuery query,
+            @RequestParam(required = false) String status) {
+        return list(query, filters("status", status));
     }
 
     @Override

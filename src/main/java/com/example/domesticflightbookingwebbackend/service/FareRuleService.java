@@ -3,6 +3,7 @@ package com.example.domesticflightbookingwebbackend.service;
 import com.example.domesticflightbookingwebbackend.common.ListQuery;
 import com.example.domesticflightbookingwebbackend.common.PageMapper;
 import com.example.domesticflightbookingwebbackend.dto.request.masterdata.FareRuleRequest;
+import com.example.domesticflightbookingwebbackend.dto.response.masterdata.FareRulePublicItem;
 import com.example.domesticflightbookingwebbackend.dto.response.masterdata.FareRuleResponse;
 import com.example.domesticflightbookingwebbackend.entity.FareClass;
 import com.example.domesticflightbookingwebbackend.entity.FareRule;
@@ -139,6 +140,24 @@ public class FareRuleService extends BaseCrudService<FareRule, Long, FareRuleReq
                 .stream()
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * Vùng khách: lấy version quy định hoàn vé mới nhất đang hiệu lực của từng hạng vé ACTIVE
+     * (tùy chọn lọc theo {@code airlineId}), giữ đúng 1 dòng mới nhất cho mỗi hạng vé.
+     */
+    @Transactional(readOnly = true)
+    public List<FareRulePublicItem> listPublic(Long airlineId) {
+        List<FareRule> rules = fareRuleRepository.findAllActivePublicRules(airlineId, LocalDateTime.now());
+        Map<Long, FareRule> latestByFareClass = new java.util.LinkedHashMap<>();
+        for (FareRule rule : rules) {
+            if (rule.getFareClass() != null && rule.getFareClass().getId() != null) {
+                latestByFareClass.putIfAbsent(rule.getFareClass().getId(), rule);
+            }
+        }
+        return latestByFareClass.values().stream()
+                .map(fareRuleMapper::toPublicItem)
+                .toList();
     }
 
     @Override

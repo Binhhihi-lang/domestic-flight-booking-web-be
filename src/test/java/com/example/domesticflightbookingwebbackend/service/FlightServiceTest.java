@@ -1,5 +1,7 @@
 package com.example.domesticflightbookingwebbackend.service;
 
+import com.example.domesticflightbookingwebbackend.common.ListQuery;
+import com.example.domesticflightbookingwebbackend.common.PageData;
 import com.example.domesticflightbookingwebbackend.dto.request.flight.FlightRequest;
 import com.example.domesticflightbookingwebbackend.dto.response.flight.FlightResponse;
 import com.example.domesticflightbookingwebbackend.dto.response.flight.FlightSearchResult;
@@ -30,6 +32,9 @@ import com.example.domesticflightbookingwebbackend.repository.FlightRepository;
 import com.example.domesticflightbookingwebbackend.repository.FlightSeatRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -42,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -260,6 +266,32 @@ class FlightServiceTest {
 
         var detail = service.getPublicById(55L);
         assertThat(detail.passengers()).isEmpty();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void list_napSeatCapacityVaAvailableSeatsBang1CauQueryKhongN1() {
+        Flight f1 = existingFlight(55L, "VN165");
+        Flight f2 = existingFlight(56L, "VN166"); // chưa sinh flight_seats → fallback aircraft.seatCapacity (180)
+
+        FlightSeatRepository.FlightSeatSummary sum1 = mock(FlightSeatRepository.FlightSeatSummary.class);
+        when(sum1.getFlightId()).thenReturn(55L);
+        when(sum1.getTotalSeats()).thenReturn(180L);
+        when(sum1.getAvailableSeats()).thenReturn(124L);
+
+        when(flightRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(f1, f2)));
+        when(flightSeatRepository.summarizeSeatsByFlightIds(List.of(55L, 56L)))
+                .thenReturn(List.of(sum1));
+
+        PageData<FlightResponse> page = service.list(new ListQuery(), null, null, null, null, null, null);
+
+        verify(flightSeatRepository, times(1)).summarizeSeatsByFlightIds(List.of(55L, 56L));
+        assertThat(page.items()).hasSize(2);
+        assertThat(page.items().get(0).seatCapacity()).isEqualTo(180);
+        assertThat(page.items().get(0).availableSeats()).isEqualTo(124);
+        assertThat(page.items().get(1).seatCapacity()).isEqualTo(180);
+        assertThat(page.items().get(1).availableSeats()).isEqualTo(180);
     }
 
     private Flight existingFlight(Long id, String number) {

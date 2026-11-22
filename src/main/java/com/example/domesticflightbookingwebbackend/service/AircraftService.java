@@ -95,13 +95,24 @@ public class AircraftService extends BaseCrudService<Aircraft, Long, AircraftReq
     @Override
     protected Page<Aircraft> search(ListQuery query, Map<String, String> filters) {
         Pageable pageable = PageMapper.toPageable(query, "aircraftCode", SORT_WHITELIST);
-        return aircraftRepository.findAll(buildSpec(query), pageable);
+        return aircraftRepository.findAll(buildSpec(query, filters), pageable);
     }
 
-    private Specification<Aircraft> buildSpec(ListQuery query) {
+    private Specification<Aircraft> buildSpec(ListQuery query, Map<String, String> filters) {
         return (root, cq, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.isFalse(root.get("isDeleted")));   // BR-LIST-04
+
+            Map<String, String> safeFilters = filters == null ? Map.of() : filters;
+            String status = safeFilters.get("status");
+            if (status != null) {
+                predicates.add(cb.equal(root.get("isActive"), "ACTIVE".equalsIgnoreCase(status)));
+            }
+            String manufacturer = safeFilters.get("manufacturer");
+            if (manufacturer != null) {
+                String like = "%" + manufacturer.trim().toLowerCase() + "%";
+                predicates.add(cb.like(cb.lower(root.get("manufacturer")), like));
+            }
 
             String keyword = query.getKeywordOrNull();
             if (keyword != null) {
