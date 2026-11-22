@@ -23,6 +23,8 @@ public record FlightResponse(
         String salesStatus,
         Long parentFlightId,
         String parentFlightNumber,
+        Integer seatCapacity,
+        Integer availableSeats,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

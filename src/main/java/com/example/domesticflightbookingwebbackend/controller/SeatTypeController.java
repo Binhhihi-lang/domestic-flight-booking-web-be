@@ -34,8 +34,11 @@ public class SeatTypeController extends BaseCrudController<SeatType, Long, SeatT
 
     @GetMapping
     @PreAuthorize("hasAuthority('SEAT_CONFIG_READ')")
-    public ApiResponse<PageData<SeatTypeResponse>> list(ListQuery query) {
-        return list(query, filters());
+    public ApiResponse<PageData<SeatTypeResponse>> list(
+            ListQuery query,
+            @RequestParam(name = "seat_class", required = false) String seatClass,
+            @RequestParam(required = false) String status) {
+        return list(query, filters("seat_class", seatClass, "status", status));
     }
 
     @Override

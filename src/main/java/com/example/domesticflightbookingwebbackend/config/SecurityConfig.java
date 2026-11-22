@@ -56,6 +56,7 @@ public class SecurityConfig {
                         // Vùng khách: CHỈ GET, không cần token. Đặt TRƯỚC /admin để
                         // không bao giờ lọt xuống nhánh authenticated.
                         .requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
 
                         // Callback từ cổng thanh toán (VNPay / payOS / VietQR / Mock Gateway) — xác thực bằng chữ ký/idempotency
                         .requestMatchers(HttpMethod.POST, "/api/payments/callback").permitAll()

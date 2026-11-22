@@ -25,7 +25,9 @@ public record OverviewDashboardResponse(
         double cancelRatePercent,
         List<DailyRevenueItem> revenueByDay,
         List<TopRouteItem> topRoutes,
-        List<BookingSummaryResponse> recentBookings
+        List<BookingSummaryResponse> recentBookings,
+        List<AirlineRevenueItem> revenueByAirline,
+        List<BookingStatusCountItem> bookingsByStatus
 ) {
     public record DailyRevenueItem(
             LocalDate date,
@@ -41,7 +43,25 @@ public record OverviewDashboardResponse(
             String arrivalAirportCode,
             long bookingsCount,
             BigDecimal revenue,
-            double loadFactorPercent
+            double loadFactorPercent,
+            long flightsCount,
+            long paxCount
+    ) {
+    }
+
+    public record AirlineRevenueItem(
+            String airlineCode,
+            String airlineName,
+            BigDecimal revenue,
+            long bookingsCount,
+            double percentage
+    ) {
+    }
+
+    public record BookingStatusCountItem(
+            String status,
+            long count,
+            double percentage
     ) {
     }
 }

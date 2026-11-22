@@ -131,7 +131,12 @@ public class AirportService extends BaseCrudService<Airport, Long, AirportReques
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.isFalse(root.get("isDeleted")));   // BR-LIST-04
 
-            String cityId = filters.get("city_id");
+            Map<String, String> safeFilters = filters == null ? Map.of() : filters;
+            String status = safeFilters.get("status");
+            if (status != null) {
+                predicates.add(cb.equal(root.get("isActive"), "ACTIVE".equalsIgnoreCase(status)));
+            }
+            String cityId = safeFilters.get("city_id");
             if (cityId != null) {
                 predicates.add(cb.equal(root.get("city").get("id"), Long.valueOf(cityId)));
             }

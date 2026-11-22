@@ -115,13 +115,23 @@ public class SeatTypeService extends BaseCrudService<SeatType, Long, SeatTypeReq
     @Override
     protected Page<SeatType> search(ListQuery query, Map<String, String> filters) {
         Pageable pageable = PageMapper.toPageable(query, "seatTypeCode", SORT_WHITELIST);
-        return seatTypeRepository.findAll(buildSpec(query), pageable);
+        return seatTypeRepository.findAll(buildSpec(query, filters), pageable);
     }
 
-    private Specification<SeatType> buildSpec(ListQuery query) {
+    private Specification<SeatType> buildSpec(ListQuery query, Map<String, String> filters) {
         return (root, cq, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.isFalse(root.get("isDeleted")));   // BR-LIST-04
+
+            Map<String, String> safeFilters = filters == null ? Map.of() : filters;
+            String seatClass = safeFilters.get("seat_class");
+            if (seatClass != null) {
+                predicates.add(cb.equal(root.get("seatClass"), SeatClass.valueOf(seatClass.trim().toUpperCase())));
+            }
+            String status = safeFilters.get("status");
+            if (status != null) {
+                predicates.add(cb.equal(root.get("isActive"), "ACTIVE".equalsIgnoreCase(status)));
+            }
 
             String keyword = query.getKeywordOrNull();
             if (keyword != null) {

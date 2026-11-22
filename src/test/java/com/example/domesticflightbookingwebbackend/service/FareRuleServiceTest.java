@@ -1,10 +1,12 @@
 package com.example.domesticflightbookingwebbackend.service;
 
 import com.example.domesticflightbookingwebbackend.dto.request.masterdata.FareRuleRequest;
+import com.example.domesticflightbookingwebbackend.dto.response.masterdata.FareRulePublicItem;
 import com.example.domesticflightbookingwebbackend.dto.response.masterdata.FareRuleResponse;
 import com.example.domesticflightbookingwebbackend.entity.Airline;
 import com.example.domesticflightbookingwebbackend.entity.FareClass;
 import com.example.domesticflightbookingwebbackend.entity.FareRule;
+import com.example.domesticflightbookingwebbackend.entity.SeatClass;
 import com.example.domesticflightbookingwebbackend.exception.BusinessException;
 import com.example.domesticflightbookingwebbackend.mapper.FareRuleMapper;
 import com.example.domesticflightbookingwebbackend.repository.BookingSegmentRepository;
@@ -15,11 +17,13 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -91,6 +95,46 @@ class FareRuleServiceTest {
 
         assertThatThrownBy(() -> service.delete(7L))
                 .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void listPublic_chiTraPhienBanMoiNhatChoMoiHangVeActive() {
+        FareClass fc = fareClass(3L, "VN_ECON_FLEX");
+        fc.setSeatClass(SeatClass.ECONOMY);
+        fc.getAirline().setAirlineName("Vietnam Airlines");
+
+        FareRule v2 = new FareRule();
+        v2.setId(22L);
+        v2.setFareClass(fc);
+        v2.setVersion(2);
+        v2.setIsRefundable(true);
+        v2.setRefundMinHoursBeforeDeparture(24);
+        v2.setRefundPercent(new BigDecimal("90"));
+        v2.setDescription("Phiên bản 2 mới nhất");
+        v2.setEffectiveFrom(LocalDateTime.of(2026, 10, 1, 0, 0));
+
+        FareRule v1 = new FareRule();
+        v1.setId(21L);
+        v1.setFareClass(fc);
+        v1.setVersion(1);
+        v1.setIsRefundable(true);
+        v1.setRefundMinHoursBeforeDeparture(48);
+        v1.setRefundPercent(new BigDecimal("70"));
+        v1.setDescription("Phiên bản 1 cũ");
+        v1.setEffectiveFrom(LocalDateTime.of(2026, 1, 1, 0, 0));
+
+        when(fareRuleRepository.findAllActivePublicRules(eq(1L), any(LocalDateTime.class)))
+                .thenReturn(List.of(v2, v1));
+
+        List<FareRulePublicItem> items = service.listPublic(1L);
+
+        assertThat(items).hasSize(1);
+        FareRulePublicItem item = items.get(0);
+        assertThat(item.version()).isEqualTo(2);
+        assertThat(item.seatClass()).isEqualTo("ECONOMY");
+        assertThat(item.airlineCode()).isEqualTo("VN");
+        assertThat(item.airlineName()).isEqualTo("Vietnam Airlines");
+        assertThat(item.refundPercent()).isEqualByComparingTo("90");
     }
 
     private FareClass fareClass(Long id, String code) {

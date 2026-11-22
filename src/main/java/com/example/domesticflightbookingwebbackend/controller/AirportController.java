@@ -36,8 +36,9 @@ public class AirportController extends BaseCrudController<Airport, Long, Airport
     @PreAuthorize("hasAuthority('AIRPORT_READ')")
     public ApiResponse<PageData<AirportResponse>> list(
             ListQuery query,
-            @RequestParam(name = "city_id", required = false) String cityId) {
-        return list(query, filters("city_id", cityId));
+            @RequestParam(name = "city_id", required = false) String cityId,
+            @RequestParam(required = false) String status) {
+        return list(query, filters("city_id", cityId, "status", status));
     }
 
     /** GET detail công khai (P — AIRPORT_READ_DETAIL). */

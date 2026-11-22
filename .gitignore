@@ -1,5 +1,6 @@
 HELP.md
 target/
+uploads/
 
 ### Env ###
 # Chặn MỌI biến thể của file env chứa bí mật — không chỉ đúng tên ".env".

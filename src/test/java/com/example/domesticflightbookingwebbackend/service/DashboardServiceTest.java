@@ -7,9 +7,12 @@ import com.example.domesticflightbookingwebbackend.entity.Aircraft;
 import com.example.domesticflightbookingwebbackend.entity.Airline;
 import com.example.domesticflightbookingwebbackend.entity.Airport;
 import com.example.domesticflightbookingwebbackend.entity.Booking;
+import com.example.domesticflightbookingwebbackend.entity.BookingSegment;
 import com.example.domesticflightbookingwebbackend.entity.BookingStatus;
+import com.example.domesticflightbookingwebbackend.entity.City;
 import com.example.domesticflightbookingwebbackend.entity.Flight;
 import com.example.domesticflightbookingwebbackend.entity.FlightOperationStatus;
+import com.example.domesticflightbookingwebbackend.entity.FlightSeatStatus;
 import com.example.domesticflightbookingwebbackend.entity.Payment;
 import com.example.domesticflightbookingwebbackend.entity.PaymentStatus;
 import com.example.domesticflightbookingwebbackend.entity.SalesStatus;
@@ -120,6 +123,154 @@ class DashboardServiceTest {
         assertThat(res.bookingsToday()).isEqualTo(2L);
         assertThat(res.cancelRatePercent()).isEqualTo(50.0);
         assertThat(res.revenueByDay()).hasSize(7);
+        assertThat(res.bookingsByStatus())
+                .extracting(OverviewDashboardResponse.BookingStatusCountItem::status)
+                .containsExactly("CONFIRMED", "PENDING_PAYMENT", "CANCELLED", "EXPIRED")
+                .doesNotContain("REFUNDED");
+    }
+
+    @Test
+    void overview_coBoLocDaysHangBayVaChangBay_tinhDungPhanTichBaoCao() {
+        Flight vnHanSgn = flightDetail(10L, "VN201", 1L, "VN", "Vietnam Airlines", "HAN", "Hà Nội", "SGN", "TP.HCM");
+        Flight vjHanDad = flightDetail(20L, "VJ501", 2L, "VJ", "Vietjet Air", "HAN", "Hà Nội", "DAD", "Đà Nẵng");
+
+        Booking b1 = new Booking();
+        b1.setId(101L);
+        b1.setStatus(BookingStatus.CONFIRMED);
+        b1.setCreatedAt(LocalDateTime.now());
+
+        Booking b2 = new Booking();
+        b2.setId(102L);
+        b2.setStatus(BookingStatus.CONFIRMED);
+        b2.setCreatedAt(LocalDateTime.now());
+
+        Booking b3 = new Booking();
+        b3.setId(103L);
+        b3.setStatus(BookingStatus.EXPIRED);
+        b3.setCreatedAt(LocalDateTime.now());
+
+        BookingSegment s1 = segment(b1, vnHanSgn, new BigDecimal("3000000.00"));
+        BookingSegment s2 = segment(b2, vjHanDad, new BigDecimal("1000000.00"));
+        BookingSegment s3 = segment(b3, vnHanSgn, new BigDecimal("1500000.00"));
+
+        Payment p1 = new Payment();
+        p1.setBooking(b1);
+        p1.setStatus(PaymentStatus.SUCCESS);
+        p1.setAmount(new BigDecimal("3000000.00"));
+        p1.setPaidAt(LocalDateTime.now());
+
+        Payment p2 = new Payment();
+        p2.setBooking(b2);
+        p2.setStatus(PaymentStatus.SUCCESS);
+        p2.setAmount(new BigDecimal("1000000.00"));
+        p2.setPaidAt(LocalDateTime.now());
+
+        PassengerRepository.BookingPassengerCount pax1 = mock(PassengerRepository.BookingPassengerCount.class);
+        when(pax1.getBookingId()).thenReturn(101L);
+        when(pax1.getPassengerCount()).thenReturn(3L);
+
+        PassengerRepository.BookingPassengerCount pax2 = mock(PassengerRepository.BookingPassengerCount.class);
+        when(pax2.getBookingId()).thenReturn(102L);
+        when(pax2.getPassengerCount()).thenReturn(2L);
+
+        FlightSeatRepository.FlightStatusCount bookedCount = mock(FlightSeatRepository.FlightStatusCount.class);
+        when(bookedCount.getFlightId()).thenReturn(10L);
+        when(bookedCount.getStatus()).thenReturn(FlightSeatStatus.BOOKED);
+        when(bookedCount.getSeatCount()).thenReturn(90L);
+
+        FlightSeatRepository.FlightStatusCount availCount = mock(FlightSeatRepository.FlightStatusCount.class);
+        when(availCount.getFlightId()).thenReturn(10L);
+        when(availCount.getStatus()).thenReturn(FlightSeatStatus.AVAILABLE);
+        when(availCount.getSeatCount()).thenReturn(90L);
+
+        when(bookingRepository.findAll()).thenReturn(List.of(b1, b2, b3));
+        when(bookingSegmentRepository.findByBookingIdInOrderBySegmentOrderAsc(any())).thenReturn(List.of(s1, s2, s3));
+        when(passengerRepository.countByBookingIdIn(any())).thenReturn(List.of(pax1, pax2));
+        when(paymentRepository.findAll()).thenReturn(List.of(p1, p2));
+        when(flightRepository.findFlightsInWindow(any(), any())).thenReturn(List.of(vnHanSgn, vjHanDad));
+        when(flightSeatRepository.countSeatsByFlightIdsAndStatus(any())).thenReturn(List.of(bookedCount, availCount));
+        when(bookingService.listAll(any(), any(), any()))
+                .thenReturn(new PageData<>(List.of(), new PageData.Pagination(1, 50, 0, 1)));
+        when(passengerRepository.count()).thenReturn(5L);
+
+        // Không lọc hãng/chặng, days=30
+        OverviewDashboardResponse full = service.overview(null, null, null, null, 30);
+        assertThat(full.revenueByDay()).hasSize(30);
+        assertThat(full.revenueByAirline()).hasSize(2);
+        assertThat(full.revenueByAirline().get(0).airlineCode()).isEqualTo("VN");
+        assertThat(full.revenueByAirline().get(0).percentage()).isEqualTo(75.0);
+        assertThat(full.revenueByAirline().get(1).airlineCode()).isEqualTo("VJ");
+        assertThat(full.revenueByAirline().get(1).percentage()).isEqualTo(25.0);
+        assertThat(full.bookingsByStatus()).hasSize(4);
+        assertThat(full.topRoutes()).hasSize(2);
+        assertThat(full.topRoutes().get(0).flightsCount()).isEqualTo(1L);
+        assertThat(full.topRoutes().get(0).paxCount()).isEqualTo(3L);
+        assertThat(full.topRoutes().get(0).loadFactorPercent()).isEqualTo(50.0);
+
+        // Lọc theo airline_id=1 và route dạng "HAN→SGN"
+        OverviewDashboardResponse filteredArrow = service.overview(null, null, 1L, "HAN→SGN", 14);
+        assertThat(filteredArrow.revenueByDay()).hasSize(14);
+        assertThat(filteredArrow.revenueTotal()).isEqualByComparingTo("3000000.00");
+        assertThat(filteredArrow.bookingsTotal()).isEqualTo(2L); // b1 (CONFIRMED) + b3 (EXPIRED)
+        assertThat(filteredArrow.revenueByAirline()).hasSize(1);
+        assertThat(filteredArrow.revenueByAirline().get(0).airlineCode()).isEqualTo("VN");
+        assertThat(filteredArrow.topRoutes()).hasSize(1);
+        assertThat(filteredArrow.topRoutes().get(0).departureAirportCode()).isEqualTo("HAN");
+        assertThat(filteredArrow.topRoutes().get(0).arrivalAirportCode()).isEqualTo("SGN");
+
+        // Lọc theo route dạng "HAN-DAD"
+        OverviewDashboardResponse filteredDash = service.overview(null, null, null, "HAN-DAD", 7);
+        assertThat(filteredDash.revenueTotal()).isEqualByComparingTo("1000000.00");
+        assertThat(filteredDash.bookingsTotal()).isEqualTo(1L);
+        assertThat(filteredDash.revenueByAirline()).hasSize(1);
+        assertThat(filteredDash.revenueByAirline().get(0).airlineCode()).isEqualTo("VJ");
+    }
+
+    private BookingSegment segment(Booking booking, Flight flight, BigDecimal fareAmount) {
+        BookingSegment seg = new BookingSegment();
+        seg.setBooking(booking);
+        seg.setFlight(flight);
+        seg.setFareAmountAtBooking(fareAmount);
+        seg.setPromotionDiscountAmount(BigDecimal.ZERO);
+        return seg;
+    }
+
+    private Flight flightDetail(
+            Long id, String number, Long airlineId, String airlineCode, String airlineName,
+            String depCode, String depCityName, String arrCode, String arrCityName) {
+        Airline airline = new Airline();
+        airline.setId(airlineId);
+        airline.setAirlineCode(airlineCode);
+        airline.setAirlineName(airlineName);
+
+        Aircraft aircraft = new Aircraft();
+        aircraft.setAircraftCode(airlineCode + "-A321");
+        aircraft.setSeatCapacity(180);
+
+        City depCity = new City();
+        depCity.setCityName(depCityName);
+        Airport dep = new Airport();
+        dep.setAirportCode(depCode);
+        dep.setCity(depCity);
+
+        City arrCity = new City();
+        arrCity.setCityName(arrCityName);
+        Airport arr = new Airport();
+        arr.setAirportCode(arrCode);
+        arr.setCity(arrCity);
+
+        Flight f = new Flight();
+        f.setId(id);
+        f.setFlightNumber(number);
+        f.setAirline(airline);
+        f.setAircraft(aircraft);
+        f.setDepartureAirport(dep);
+        f.setArrivalAirport(arr);
+        f.setScheduledDeparture(LocalDateTime.now().plusHours(2));
+        f.setScheduledArrival(LocalDateTime.now().plusHours(4));
+        f.setOperationStatus(FlightOperationStatus.SCHEDULED);
+        f.setSalesStatus(SalesStatus.OPEN);
+        return f;
     }
 
     private Flight flight(Long id, String number, FlightOperationStatus opStatus) {

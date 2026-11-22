@@ -34,8 +34,11 @@ public class AircraftController extends BaseCrudController<Aircraft, Long, Aircr
 
     @GetMapping
     @PreAuthorize("hasAuthority('AIRCRAFT_READ')")
-    public ApiResponse<PageData<AircraftResponse>> list(ListQuery query) {
-        return list(query, filters());
+    public ApiResponse<PageData<AircraftResponse>> list(
+            ListQuery query,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String manufacturer) {
+        return list(query, filters("status", status, "manufacturer", manufacturer));
     }
 
     @Override
