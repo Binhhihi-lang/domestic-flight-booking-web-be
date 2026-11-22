@@ -20,6 +20,10 @@ public class Booking {
     @Column(name = "booking_code", nullable = false, length = 30, unique = true)
     private String bookingCode;
 
+    /** Mã đơn hàng công khai chống đoán ID tuần tự (định dạng DH + timestamp ms). */
+    @Column(name = "order_code", nullable = false, length = 30, unique = true)
+    private String orderCode;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

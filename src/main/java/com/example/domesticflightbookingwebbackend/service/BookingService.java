@@ -148,6 +148,7 @@ public class BookingService {
         LocalDateTime now = LocalDateTime.now();
         Booking booking = new Booking();
         booking.setBookingCode(generateBookingCode());
+        booking.setOrderCode(generateOrderCode());
         booking.setUser(user);
         booking.setTripType(tripType);
         booking.setStatus(BookingStatus.PENDING_PAYMENT);
@@ -354,7 +355,8 @@ public class BookingService {
     }
 
     /**
-     * Tra cứu công khai theo mã đặt chỗ (hoặc mã đơn DH-id) và email chủ đơn ({@code GET /api/public/bookings/lookup}).
+     * Tra cứu công khai theo mã đơn hàng (DH...) hoặc mã đặt chỗ (PNR) và email chủ đơn
+     * ({@code GET /api/public/bookings/lookup}). Không tra theo ID tuần tự để tránh dò đơn.
      */
     @Transactional(readOnly = true)
     public BookingDetailResponse lookupPublic(String bookingCode, String email) {
@@ -364,11 +366,7 @@ public class BookingService {
         String cleanCode = bookingCode.trim().toUpperCase();
         String cleanEmail = email.trim().toLowerCase();
 
-        Booking booking = null;
-        if (cleanCode.startsWith("DH-") && cleanCode.substring(3).matches("\\d+")) {
-            Long id = Long.parseLong(cleanCode.substring(3));
-            booking = bookingRepository.findWithUserById(id).orElse(null);
-        }
+        Booking booking = bookingRepository.findWithUserByOrderCodeIgnoreCase(cleanCode).orElse(null);
         if (booking == null) {
             booking = bookingRepository.findWithUserByBookingCodeIgnoreCase(cleanCode).orElse(null);
         }
@@ -675,6 +673,21 @@ public class BookingService {
         return "VF" + (System.currentTimeMillis() % 1_000_000);
     }
 
+    /**
+     * Sinh mã đơn hàng công khai dạng {@code "DH" + System.currentTimeMillis()}
+     * để chống dò ID tuần tự; tự động tịnh tiến +1ms nếu trùng cùng mili-giây.
+     */
+    private String generateOrderCode() {
+        long base = System.currentTimeMillis();
+        for (int attempt = 0; attempt < 50; attempt++) {
+            String code = "DH" + (base + attempt);
+            if (!bookingRepository.existsByOrderCode(code)) {
+                return code;
+            }
+        }
+        return "DH" + System.currentTimeMillis() + RANDOM.nextInt(90) + 10;
+    }
+
     private PageData<BookingSummaryResponse> toSummaryPageData(Page<Booking> page) {
         List<Booking> bookings = page.getContent();
         if (bookings.isEmpty()) {
@@ -702,6 +715,7 @@ public class BookingService {
             return new BookingSummaryResponse(
                     b.getId(),
                     b.getBookingCode(),
+                    b.getOrderCode(),
                     u.getId(),
                     u.getFullName(),
                     u.getEmail(),
@@ -850,6 +864,7 @@ public class BookingService {
         return new BookingDetailResponse(
                 booking.getId(),
                 booking.getBookingCode(),
+                booking.getOrderCode(),
                 u.getId(),
                 u.getFullName(),
                 u.getEmail(),
@@ -891,6 +906,7 @@ public class BookingService {
                 String like = "%" + keyword.toLowerCase() + "%";
                 predicates.add(cb.or(
                         cb.like(cb.lower(root.get("bookingCode")), like),
+                        cb.like(cb.lower(root.get("orderCode")), like),
                         cb.like(cb.lower(root.get("user").get("fullName")), like),
                         cb.like(cb.lower(root.get("user").get("email")), like)));
             }
