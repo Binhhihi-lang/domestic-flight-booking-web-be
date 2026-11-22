@@ -660,11 +660,13 @@ public class LargeDatasetSeeder {
                             (SELECT id FROM users WHERE email = 'thutrang@vinafly.vn' AND is_deleted = false LIMIT 1) AS u3
                     )
                     INSERT INTO bookings (
-                        booking_code, user_id, trip_type, status,
+                        booking_code, order_code, user_id, trip_type, status,
                         fare_amount, promotion_discount_amount, voucher_discount_amount, seat_surcharge_amount, baggage_amount, total_amount,
                         currency, payment_expires_at, cancelled_at, cancel_reason, created_at, updated_at
                     )
-                    SELECT v.code, v.uid, v.trip_type, v.status,
+                    SELECT v.code,
+                           'DH' || (FLOOR(EXTRACT(EPOCH FROM v.created_at) * 1000)::BIGINT + ROW_NUMBER() OVER ()),
+                           v.uid, v.trip_type, v.status,
                            v.fare_amt, v.promo_amt, v.voucher_amt, v.seat_amt, v.bag_amt,
                            (v.fare_amt - v.promo_amt - v.voucher_amt + v.seat_amt + v.bag_amt),
                            'VND', v.expires_at, v.cancelled_at, v.cancel_reason, v.created_at, v.created_at

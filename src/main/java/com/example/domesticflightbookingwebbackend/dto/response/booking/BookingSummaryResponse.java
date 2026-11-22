@@ -10,6 +10,7 @@ import java.util.List;
 public record BookingSummaryResponse(
         Long id,
         String bookingCode,
+        String orderCode,
         Long userId,
         String customerName,
         String customerEmail,

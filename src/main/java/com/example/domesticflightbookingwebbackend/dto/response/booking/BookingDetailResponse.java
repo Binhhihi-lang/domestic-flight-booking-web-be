@@ -15,6 +15,7 @@ import java.util.List;
 public record BookingDetailResponse(
         Long id,
         String bookingCode,
+        String orderCode,
         Long userId,
         String customerName,
         String customerEmail,
