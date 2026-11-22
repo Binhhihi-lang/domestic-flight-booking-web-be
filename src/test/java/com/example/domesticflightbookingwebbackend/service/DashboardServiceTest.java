@@ -193,9 +193,11 @@ class DashboardServiceTest {
                 .thenReturn(new PageData<>(List.of(), new PageData.Pagination(1, 50, 0, 1)));
         when(passengerRepository.count()).thenReturn(5L);
 
-        // Không lọc hãng/chặng, days=30
+        // Không lọc hãng/chặng, days=30 -> gom gọn thành 8 cụm ngày để biểu đồ không tràn ngang
         OverviewDashboardResponse full = service.overview(null, null, null, null, 30);
-        assertThat(full.revenueByDay()).hasSize(30);
+        assertThat(full.revenueByDay()).hasSize(8);
+        assertThat(full.revenueByDay().get(full.revenueByDay().size() - 1).revenue())
+                .isEqualByComparingTo("4000000.00");
         assertThat(full.revenueByAirline()).hasSize(2);
         assertThat(full.revenueByAirline().get(0).airlineCode()).isEqualTo("VN");
         assertThat(full.revenueByAirline().get(0).percentage()).isEqualTo(75.0);
