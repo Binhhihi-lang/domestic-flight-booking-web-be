@@ -28,6 +28,9 @@ import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -274,7 +277,12 @@ public class DashboardService {
 
             BigDecimal amt = p.getAmount() == null ? BigDecimal.ZERO : p.getAmount();
             LocalDateTime paidTime = p.getPaidAt() != null ? p.getPaidAt() : p.getCreatedAt();
-            revenueTotal = revenueTotal.add(amt);
+            boolean inPeriod = !hasDateFilter || (paidTime != null
+                    && !paidTime.toLocalDate().isBefore(chartStart)
+                    && !paidTime.toLocalDate().isAfter(chartEnd));
+            if (inPeriod) {
+                revenueTotal = revenueTotal.add(amt);
+            }
 
             if (paidTime != null) {
                 if (!paidTime.isBefore(startOfToday) && paidTime.isBefore(endOfToday)) {
@@ -287,9 +295,17 @@ public class DashboardService {
             }
         }
 
+        // Tập đơn dùng cho các bảng & KPI báo cáo (áp dụng thêm lọc ngày nếu user truyền from_date/to_date/days)
+        List<Booking> reportBookings = hasDateFilter
+                ? filteredBookings.stream()
+                        .filter(b -> b.getCreatedAt() != null
+                                && !b.getCreatedAt().toLocalDate().isBefore(chartStart)
+                                && !b.getCreatedAt().toLocalDate().isAfter(chartEnd))
+                        .toList()
+                : filteredBookings;
+
         long bookingsToday = 0;
         long bookingsMonth = 0;
-        long cancelledCount = 0;
         Map<LocalDate, Long> bookingsByDateMap = new HashMap<>();
 
         for (Booking b : filteredBookings) {
@@ -303,27 +319,19 @@ public class DashboardService {
                 }
                 bookingsByDateMap.merge(created.toLocalDate(), 1L, Long::sum);
             }
-            if (b.getStatus() == BookingStatus.CANCELLED) {
-                cancelledCount++;
-            }
         }
 
-        long totalBookings = filteredBookings.size();
+        long cancelledCount = reportBookings.stream()
+                .filter(b -> b.getStatus() == BookingStatus.CANCELLED)
+                .count();
+        long totalBookings = reportBookings.size();
         double cancelRate = totalBookings == 0
                 ? 0.0
                 : Math.round((cancelledCount * 1000.0) / totalBookings) / 10.0;
 
-        // Biểu đồ doanh thu theo khoảng ngày
-        List<OverviewDashboardResponse.DailyRevenueItem> revenueByDay = new ArrayList<>();
-        for (LocalDate d = chartStart; !d.isAfter(chartEnd); d = d.plusDays(1)) {
-            BigDecimal rev = revenueByDateMap.getOrDefault(d, BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
-            long bCount = bookingsByDateMap.getOrDefault(d, 0L);
-            revenueByDay.add(new OverviewDashboardResponse.DailyRevenueItem(
-                    d,
-                    vietnameseDayLabel(d.getDayOfWeek()),
-                    rev,
-                    bCount));
-        }
+        // Biểu đồ doanh thu: tự gom cột thông minh theo độ dài khoảng ngày (<=14 ngày: theo ngày; 15-120 ngày: theo cụm/tuần; >120 ngày: theo tháng)
+        List<OverviewDashboardResponse.DailyRevenueItem> revenueByDay =
+                buildRevenueBuckets(chartStart, chartEnd, revenueByDateMap, bookingsByDateMap);
 
         // Chuyến bay hôm nay & hệ số lấp đầy (có áp dụng bộ lọc hãng / chặng nếu truyền)
         List<Flight> todayFlights = flightRepository.findFlightsInWindow(startOfToday, endOfToday).stream()
@@ -349,15 +357,6 @@ public class DashboardService {
                 ? 0.0
                 : Math.round((totalOccupied * 1000.0) / totalCap) / 10.0;
 
-        // Tập đơn dùng cho các bảng phân tích báo cáo (áp dụng thêm lọc ngày nếu user truyền from_date/to_date/days)
-        List<Booking> reportBookings = hasDateFilter
-                ? filteredBookings.stream()
-                        .filter(b -> b.getCreatedAt() != null
-                                && !b.getCreatedAt().toLocalDate().isBefore(chartStart)
-                                && !b.getCreatedAt().toLocalDate().isAfter(chartEnd))
-                        .toList()
-                : filteredBookings;
-
         List<OverviewDashboardResponse.BookingStatusCountItem> bookingsByStatus =
                 buildBookingsByStatus(reportBookings);
         List<OverviewDashboardResponse.AirlineRevenueItem> revenueByAirline =
@@ -378,8 +377,8 @@ public class DashboardService {
                         .toList()
                 : recentRaw;
 
-        long totalPax = hasSegmentFilter
-                ? filteredBookings.stream()
+        long totalPax = (hasSegmentFilter || hasDateFilter)
+                ? reportBookings.stream()
                         .mapToLong(b -> paxByBooking.getOrDefault(b.getId(), 0L))
                         .sum()
                 : passengerRepository.count();
@@ -406,6 +405,70 @@ public class DashboardService {
     }
 
     // ================= Helpers =================
+
+    private List<OverviewDashboardResponse.DailyRevenueItem> buildRevenueBuckets(
+            LocalDate chartStart,
+            LocalDate chartEnd,
+            Map<LocalDate, BigDecimal> revenueByDateMap,
+            Map<LocalDate, Long> bookingsByDateMap) {
+        long spanDays = ChronoUnit.DAYS.between(chartStart, chartEnd) + 1;
+        DateTimeFormatter dayFmt = DateTimeFormatter.ofPattern("dd/MM");
+        List<OverviewDashboardResponse.DailyRevenueItem> items = new ArrayList<>();
+
+        if (spanDays <= 14) {
+            for (LocalDate d = chartStart; !d.isAfter(chartEnd); d = d.plusDays(1)) {
+                BigDecimal rev = revenueByDateMap.getOrDefault(d, BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+                long bCount = bookingsByDateMap.getOrDefault(d, 0L);
+                String label = spanDays <= 7 ? vietnameseDayLabel(d.getDayOfWeek()) : d.format(dayFmt);
+                items.add(new OverviewDashboardResponse.DailyRevenueItem(d, label, rev, bCount));
+            }
+            return items;
+        }
+
+        if (spanDays <= 120) {
+            int bucketSize = Math.max(2, (int) Math.ceil(spanDays / 8.0));
+            LocalDate cursor = chartStart;
+            while (!cursor.isAfter(chartEnd)) {
+                LocalDate bucketEnd = cursor.plusDays(bucketSize - 1L);
+                if (bucketEnd.isAfter(chartEnd)) {
+                    bucketEnd = chartEnd;
+                }
+                BigDecimal rev = BigDecimal.ZERO;
+                long bCount = 0;
+                for (LocalDate d = cursor; !d.isAfter(bucketEnd); d = d.plusDays(1)) {
+                    rev = rev.add(revenueByDateMap.getOrDefault(d, BigDecimal.ZERO));
+                    bCount += bookingsByDateMap.getOrDefault(d, 0L);
+                }
+                items.add(new OverviewDashboardResponse.DailyRevenueItem(
+                        cursor,
+                        cursor.format(dayFmt),
+                        rev.setScale(2, RoundingMode.HALF_UP),
+                        bCount));
+                cursor = bucketEnd.plusDays(1);
+            }
+            return items;
+        }
+
+        YearMonth startYm = YearMonth.from(chartStart);
+        YearMonth endYm = YearMonth.from(chartEnd);
+        for (YearMonth ym = startYm; !ym.isAfter(endYm); ym = ym.plusMonths(1)) {
+            LocalDate mStart = ym.atDay(1).isBefore(chartStart) ? chartStart : ym.atDay(1);
+            LocalDate mEnd = ym.atEndOfMonth().isAfter(chartEnd) ? chartEnd : ym.atEndOfMonth();
+            BigDecimal rev = BigDecimal.ZERO;
+            long bCount = 0;
+            for (LocalDate d = mStart; !d.isAfter(mEnd); d = d.plusDays(1)) {
+                rev = rev.add(revenueByDateMap.getOrDefault(d, BigDecimal.ZERO));
+                bCount += bookingsByDateMap.getOrDefault(d, 0L);
+            }
+            String label = "T" + ym.getMonthValue() + "/" + String.format("%02d", ym.getYear() % 100);
+            items.add(new OverviewDashboardResponse.DailyRevenueItem(
+                    mStart,
+                    label,
+                    rev.setScale(2, RoundingMode.HALF_UP),
+                    bCount));
+        }
+        return items;
+    }
 
     private Map<Long, Map<FlightSeatStatus, Long>> loadSeatCounts(List<Flight> flights) {
         if (flights.isEmpty()) {
