@@ -1,0 +1,4326 @@
+{
+  "info": {
+    "_postman_id": "dfbw-2026-4000-8000-000000000001",
+    "name": "Domestic Flight Booking API — Hệ thống Đặt Vé Máy Bay Nội Địa",
+    "description": "Collection test API backend **Website Đặt Vé Máy Bay Nội Địa** độc lập trên Postman.\n\n## Cách dùng nhanh\n1. Import file này vào Postman (`File → Import`).\n2. Khởi động Docker (`postgres`, `redis`) và chạy backend Spring Boot ở `http://localhost:8080`.\n3. Chạy **Folder 01** để đăng nhập cả 3 vai trò (`ADMIN`, `STAFF`, `CUSTOMER`) — token tự lưu vào `token_admin`, `token_staff`, `token_customer`.\n4. Chạy tuần tự **Folder 02** để test trọn luồng đặt vé End-to-End (Tìm chuyến → Sơ đồ ghế → Tạo đơn → Giữ ghế → Hành lý → Thanh toán → E-Ticket → Xác thực QR → Tra cứu).\n5. Chạy **Folder 03** (Payment Callback/Hủy đơn/Thông báo), **Folder 04** (STAFF vận hành) và **Folder 05** (ADMIN quản trị & báo cáo).\n\n## Quy ước API\n- Envelope chuẩn: `{ \"code\": 1000, \"message\": \"Thành công\", \"data\": ... }`.\n- Phân trang: `page` bắt đầu từ **1** (`?page=1&size=10`).\n- Xác thực: Slim JWT HS256 gửi qua `Authorization: Bearer <token>`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 — Công khai (Public — Không cần Token)",
+      "description": "Các API danh mục và tra cứu công khai, không cần Bearer Token.",
+      "item": [
+        {
+          "name": "01. Danh sách Thành phố",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/cities?page=1&size=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "cities"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Kiểm tra server đang chạy và dữ liệu thành phố đã được seed."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('code = 1000 & có items', () => {",
+                  "    pm.expect(body.code).to.eql(1000);",
+                  "    pm.expect(body.data.items).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. Danh sách Sân bay",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/airports?page=1&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "airports"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('code = 1000', () => pm.expect(pm.response.json().code).to.eql(1000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03. Danh sách Hãng hàng không",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/airlines?page=1&size=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "airlines"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('code = 1000', () => pm.expect(pm.response.json().code).to.eql(1000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04. Danh sách Khuyến mãi đang chạy",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/promotions?page=1&size=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "promotions"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('code = 1000', () => pm.expect(pm.response.json().code).to.eql(1000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05. Danh sách Tin tức",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/news?page=1&size=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "news"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('code = 1000', () => pm.expect(pm.response.json().code).to.eql(1000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06. Quy định hoàn vé công khai",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/fare-rules",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "fare-rules"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('code = 1000 & data là mảng', () => {",
+                  "    pm.expect(body.code).to.eql(1000);",
+                  "    pm.expect(body.data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07. Danh sách Gói hành lý ký gửi công khai",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/baggage-options?page=1&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "baggage-options"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('code = 1000', () => pm.expect(body.code).to.eql(1000));",
+                  "if (body.data && body.data.items && body.data.items.length > 0) {",
+                  "    pm.collectionVariables.set('baggage_option_id', String(body.data.items[0].id));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 — Xác thực & Phân quyền 3 Vai trò (ADMIN / STAFF / CUSTOMER)",
+      "description": "Đăng nhập 3 vai trò để tự động lưu token riêng (`token_admin`, `token_staff`, `token_customer`) và kiểm tra phân quyền RBAC.",
+      "item": [
+        {
+          "name": "01. Đăng nhập ADMIN (tự lưu token_admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Đăng nhập ADMIN demo. Script cấp collection sẽ tự lưu `token_admin` và `refresh_token_admin`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Đăng nhập ADMIN thành công (200)', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('code = 1000 & có access_token', () => {",
+                  "    pm.expect(body.code).to.eql(1000);",
+                  "    pm.expect(body.data.access_token).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Roles chứa ADMIN', () => {",
+                  "    pm.expect(body.data.user.roles).to.include('ADMIN');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. Đăng nhập STAFF (tự lưu token_staff)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Đăng nhập STAFF demo. Script cấp collection sẽ tự lưu `token_staff` và `refresh_token_staff`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{staff_email}}\",\n  \"password\": \"{{staff_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Đăng nhập STAFF thành công (200)', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Roles chứa STAFF', () => {",
+                  "    pm.expect(body.data.user.roles).to.include('STAFF');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03. Đăng nhập CUSTOMER (tự lưu token_customer)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Đăng nhập CUSTOMER demo. Script cấp collection sẽ tự lưu `token_customer` và `refresh_token_customer`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customer_email}}\",\n  \"password\": \"{{customer_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Đăng nhập CUSTOMER thành công (200)', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Roles chứa CUSTOMER', () => {",
+                  "    pm.expect(body.data.user.roles).to.include('CUSTOMER');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04. Làm mới Token CUSTOMER (POST /api/auth/refresh)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Kiểm tra cơ chế xoay vòng Refresh Token (whitelist Redis) và tự cập nhật `token_customer`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token_customer}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Refresh thành công (200)', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Trả access_token mới', () => {",
+                  "    pm.expect(body.code).to.eql(1000);",
+                  "    pm.expect(body.data.access_token).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05. Hồ sơ ADMIN (GET /api/profile)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Đúng email ADMIN', () => pm.expect(pm.response.json().data.email).to.eql(pm.collectionVariables.get('admin_email')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06. Hồ sơ STAFF (GET /api/profile)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_staff}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Đúng email STAFF', () => pm.expect(pm.response.json().data.email).to.eql(pm.collectionVariables.get('staff_email')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07. Hồ sơ CUSTOMER (GET /api/profile)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Đúng email CUSTOMER', () => pm.expect(pm.response.json().data.email).to.eql(pm.collectionVariables.get('customer_email')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08. [Negative] Sai mật khẩu → 400 (code 1007)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customer_email}}\",\n  \"password\": \"SaiMatKhau@999\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 400 BAD_REQUEST', () => pm.response.to.have.status(400));",
+                  "pm.test('Mã lỗi 1007 INVALID_CREDENTIALS', () => pm.expect(pm.response.json().code).to.eql(1007));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09. [Negative] Không có Token gọi /api/profile → 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 401 UNAUTHORIZED', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10. [RBAC] CUSTOMER gọi /api/admin/dashboard → 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/dashboard",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "dashboard"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('CUSTOMER bị chặn 403 FORBIDDEN', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11. [RBAC] STAFF gọi /api/admin/users → 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_staff}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('STAFF không có quyền USER_READ → 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — Luồng Đặt Vé End-to-End (CUSTOMER)",
+      "description": "Chạy tuần tự từ 01 → 13 (sau khi đã đăng nhập CUSTOMER ở Folder 01). Các bước tự động lưu `flight_id`, `fare_class_id`, `flight_seat_id`, `booking_id`, `passenger_id`, `ticket_code`.",
+      "item": [
+        {
+          "name": "01. Tìm chuyến bay mở bán (GET /api/public/flights/search)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/flights/search?adults=1&trip_type=ONE_WAY",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "flights",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "adults",
+                  "value": "1"
+                },
+                {
+                  "key": "trip_type",
+                  "value": "ONE_WAY"
+                }
+              ]
+            },
+            "description": "Tìm chuyến bay mở bán có ghế trống và tự động lưu `flight_id`, `fare_class_id`, `flight_airline_id`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('code = 1000 & tìm thấy chuyến bay có giá', () => {",
+                  "    pm.expect(body.code).to.eql(1000);",
+                  "    const items = (body.data && body.data.items) ? body.data.items : (Array.isArray(body.data) ? body.data : []);",
+                  "    const candidate = items.find(f => f.fares && f.fares.length > 0 && f.fares.some(fr => fr.seats_available > 0)) || items[0];",
+                  "    pm.expect(candidate, 'Phải có ít nhất 1 chuyến bay mở bán').to.be.an('object');",
+                  "    const fid = candidate.flight_id || candidate.id;",
+                  "    pm.collectionVariables.set('flight_id', String(fid));",
+                  "    if (candidate.airline && candidate.airline.id) {",
+                  "        pm.collectionVariables.set('flight_airline_id', String(candidate.airline.id));",
+                  "    }",
+                  "    const fare = (candidate.fares || []).find(fr => fr.seats_available > 0) || (candidate.fares || [])[0];",
+                  "    pm.expect(fare, 'Chuyến bay phải có ít nhất 1 hạng vé').to.be.an('object');",
+                  "    pm.collectionVariables.set('fare_class_id', String(fare.fare_class_id));",
+                  "    console.log('Selected flight_id:', fid, '| fare_class_id:', fare.fare_class_id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. Xem sơ đồ ghế chuyến bay (GET /api/public/flights/{{flight_id}}/seat-map)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/flights/{{flight_id}}/seat-map",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "flights",
+                "{{flight_id}}",
+                "seat-map"
+              ]
+            },
+            "description": "Lấy sơ đồ ghế công khai của chuyến bay đã chọn và tự lưu 1 ghế `AVAILABLE` vào `flight_seat_id`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Có ghế AVAILABLE để chọn', () => {",
+                  "    pm.expect(body.code).to.eql(1000);",
+                  "    const seats = (body.data && body.data.seats) ? body.data.seats : [];",
+                  "    const avail = seats.find(s => s.status === 'AVAILABLE');",
+                  "    pm.expect(avail, 'Phải có ít nhất 1 ghế AVAILABLE').to.be.an('object');",
+                  "    pm.collectionVariables.set('flight_seat_id', String(avail.id));",
+                  "    pm.collectionVariables.set('flight_seat_code', String(avail.seat_code));",
+                  "    console.log('Selected seat:', avail.seat_code, '(id=' + avail.id + ')');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03. Lấy gói hành lý theo hãng bay (GET /api/public/baggage-options)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/baggage-options?airline_id={{flight_airline_id}}&page=1&size=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "baggage-options"
+              ],
+              "query": [
+                {
+                  "key": "airline_id",
+                  "value": "{{flight_airline_id}}"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Lấy gói hành lý tương ứng với hãng của chuyến bay để chọn ở bước 07."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data.items && body.data.items.length > 0) {",
+                  "    pm.collectionVariables.set('baggage_option_id', String(body.data.items[0].id));",
+                  "    console.log('Selected baggage_option_id:', body.data.items[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04. Xem Kho Voucher & Ví Voucher của tôi",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/my-vouchers?page=1&size=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "my-vouchers"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Kiểm tra ví voucher của CUSTOMER. Nếu có voucher UNUSED sẽ tự lưu vào `user_voucher_id`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('code = 1000', () => pm.expect(body.code).to.eql(1000));",
+                  "const items = (body.data && body.data.items) ? body.data.items : [];",
+                  "const unused = items.find(v => v.status === 'UNUSED');",
+                  "if (unused) pm.collectionVariables.set('user_voucher_id', String(unused.id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05. Tạo đơn đặt vé — PENDING_PAYMENT (POST /api/bookings)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings"
+              ]
+            },
+            "description": "Tạo booking nháp ở trạng thái `PENDING_PAYMENT`. Lưu ý: request dùng `{{flight_id}}` và `{{fare_class_id}}` đã lưu từ bước 01.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trip_type\": \"ONE_WAY\",\n  \"segments\": [\n    {\n      \"flight_id\": {{flight_id}},\n      \"fare_class_id\": {{fare_class_id}},\n      \"segment_order\": 1\n    }\n  ],\n  \"passengers\": [\n    {\n      \"full_name\": \"NGUYEN VAN TEST\",\n      \"gender\": \"MALE\",\n      \"birth_date\": \"1998-05-15\",\n      \"passenger_type\": \"ADULT\",\n      \"passport_number\": \"001098012345\",\n      \"phone\": \"0912345678\",\n      \"email\": \"khachhang.test@vinafly.vn\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tạo booking thành công (201)', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('Trạng thái PENDING_PAYMENT & có order_code', () => {",
+                  "    pm.expect(body.code).to.eql(1000);",
+                  "    pm.expect(body.data.status).to.eql('PENDING_PAYMENT');",
+                  "    pm.expect(body.data.order_code).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.collectionVariables.set('booking_id', String(body.data.id));",
+                  "pm.collectionVariables.set('order_code', String(body.data.order_code));",
+                  "if (body.data.booking_code) pm.collectionVariables.set('booking_code', String(body.data.booking_code));",
+                  "if (body.data.passengers && body.data.passengers.length > 0) {",
+                  "    pm.collectionVariables.set('passenger_id', String(body.data.passengers[0].id));",
+                  "}",
+                  "console.log('Created booking_id:', body.data.id, '| order_code:', body.data.order_code);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06. Giữ ghế tạm 15 phút (POST /api/bookings/{{booking_id}}/seats/hold)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/{{booking_id}}/seats/hold",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{booking_id}}",
+                "seats",
+                "hold"
+              ]
+            },
+            "description": "Giữ ghế tạm 15 phút (Redis Distributed Lock + Atomic SQL + Partial Unique Index).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"passenger_id\": {{passenger_id}},\n  \"flight_seat_id\": {{flight_seat_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Giữ ghế thành công (200/201)', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const body = pm.response.json();",
+                  "pm.test('code = 1000', () => pm.expect(body.code).to.eql(1000));",
+                  "if (body.data && body.data.id) {",
+                  "    pm.collectionVariables.set('seat_hold_id', String(body.data.id));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07. Chọn hành lý ký gửi (POST /api/bookings/{{booking_id}}/baggages)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/{{booking_id}}/baggages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{booking_id}}",
+                "baggages"
+              ]
+            },
+            "description": "Gắn gói hành lý ký gửi cho hành khách và tự động tính lại `total_amount`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"baggages\": [\n    {\n      \"passenger_id\": {{passenger_id}},\n      \"baggage_option_id\": {{baggage_option_id}},\n      \"quantity\": 1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Chọn hành lý thành công (200)', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('code = 1000 & cập nhật baggage_amount > 0', () => {",
+                  "    pm.expect(body.code).to.eql(1000);",
+                  "    pm.expect(Number(body.data.baggage_amount)).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08. Xem chi tiết đơn trước thanh toán (GET /api/bookings/{{booking_id}})",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/{{booking_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{booking_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Có đủ segments, passengers, seat_holds, baggages', () => {",
+                  "    pm.expect(body.code).to.eql(1000);",
+                  "    pm.expect(body.data.segments).to.be.an('array').that.is.not.empty;",
+                  "    pm.expect(body.data.passengers).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09. Thanh toán giả lập SUCCESS — VNPay (POST /api/bookings/{{booking_id}}/payments)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/{{booking_id}}/payments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{booking_id}}",
+                "payments"
+              ]
+            },
+            "description": "Dùng `simulate_result: SUCCESS` để test luồng xác nhận đơn (Booking → CONFIRMED, Seat → BOOKED, tự động xuất E-Ticket & gửi Notification).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_method\": \"VNPAY\",\n  \"gateway_name\": \"VNPAY\",\n  \"simulate_result\": \"SUCCESS\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Thanh toán thành công (200/201)', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const body = pm.response.json();",
+                  "pm.test('Payment status = SUCCESS', () => {",
+                  "    pm.expect(body.code).to.eql(1000);",
+                  "    pm.expect(body.data.status).to.eql('SUCCESS');",
+                  "});",
+                  "if (body.data && body.data.id) pm.collectionVariables.set('payment_id', String(body.data.id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10. Xem lại đơn sau thanh toán — CONFIRMED & PNR",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/{{booking_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{booking_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Booking đã chuyển CONFIRMED & có PNR booking_code', () => {",
+                  "    pm.expect(body.data.status).to.eql('CONFIRMED');",
+                  "    pm.expect(body.data.booking_code).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.collectionVariables.set('booking_code', String(body.data.booking_code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11. Lấy Vé điện tử E-Ticket (GET /api/bookings/{{booking_id}}/e-tickets)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/{{booking_id}}/e-tickets",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{booking_id}}",
+                "e-tickets"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Đã xuất ít nhất 1 E-Ticket', () => {",
+                  "    pm.expect(body.code).to.eql(1000);",
+                  "    pm.expect(body.data).to.be.an('array').that.is.not.empty;",
+                  "    pm.collectionVariables.set('ticket_code', String(body.data[0].ticket_code));",
+                  "    console.log('Issued ticket_code:', body.data[0].ticket_code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12. Xác thực QR Vé điện tử công khai (GET /api/public/e-tickets/verify)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/e-tickets/verify?ticket_code={{ticket_code}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "e-tickets",
+                "verify"
+              ],
+              "query": [
+                {
+                  "key": "ticket_code",
+                  "value": "{{ticket_code}}"
+                }
+              ]
+            },
+            "description": "Endpoint công khai khi quét mã QR trên E-Ticket (đã ẩn PII nhạy cảm)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Vé hợp lệ (code 1000)', () => {",
+                  "    pm.expect(body.code).to.eql(1000);",
+                  "    pm.expect(body.data.ticket_code).to.eql(pm.collectionVariables.get('ticket_code'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13. Tra cứu đặt chỗ công khai (GET /api/public/bookings/lookup)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/bookings/lookup?booking_code={{booking_code}}&email=khachhang.test@vinafly.vn",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "bookings",
+                "lookup"
+              ],
+              "query": [
+                {
+                  "key": "booking_code",
+                  "value": "{{booking_code}}"
+                },
+                {
+                  "key": "email",
+                  "value": "khachhang.test@vinafly.vn"
+                }
+              ]
+            },
+            "description": "Tra cứu công khai bằng PNR (hoặc `order_code`) + email hành khách/chủ đơn."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Tra cứu đúng đơn CONFIRMED', () => {",
+                  "    pm.expect(body.code).to.eql(1000);",
+                  "    pm.expect(body.data.booking_code).to.eql(pm.collectionVariables.get('booking_code'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — Xử lý Payment Callback, Hủy đơn & Thông báo (CUSTOMER)",
+      "description": "Kiểm thử tạo giao dịch PENDING → Callback FAILED, khách hàng tự hủy đơn (không phá đơn đã CONFIRMED ở Folder 02), lịch sử đơn hàng và thông báo.",
+      "item": [
+        {
+          "name": "01. Tạo đơn phụ để test Callback & Hủy",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings"
+              ]
+            },
+            "description": "Tạo một đơn mới ở trạng thái `PENDING_PAYMENT` để test luồng thanh toán thất bại và hủy đơn.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trip_type\": \"ONE_WAY\",\n  \"segments\": [\n    {\n      \"flight_id\": {{flight_id}},\n      \"fare_class_id\": {{fare_class_id}},\n      \"segment_order\": 1\n    }\n  ],\n  \"passengers\": [\n    {\n      \"full_name\": \"TRAN THI HUY\",\n      \"gender\": \"FEMALE\",\n      \"birth_date\": \"1999-09-20\",\n      \"passenger_type\": \"ADULT\",\n      \"passport_number\": \"001199054321\",\n      \"phone\": \"0987654321\",\n      \"email\": \"huy.test@vinafly.vn\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tạo đơn phụ thành công (201)', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('cancel_booking_id', String(body.data.id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. Khởi tạo thanh toán PENDING — VIETQR",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/{{cancel_booking_id}}/payments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{cancel_booking_id}}",
+                "payments"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_method\": \"VIETQR\",\n  \"gateway_name\": \"VIETQR\",\n  \"simulate_result\": \"PENDING\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tạo payment PENDING thành công (200/201)', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const body = pm.response.json();",
+                  "pm.test('Trạng thái PENDING & có thông tin VietQR', () => {",
+                  "    pm.expect(body.data.status).to.eql('PENDING');",
+                  "});",
+                  "pm.collectionVariables.set('cancel_payment_id', String(body.data.id));",
+                  "pm.collectionVariables.set('cancel_payment_amount', String(body.data.amount));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03. Giả lập Callback FAILED từ cổng thanh toán (POST /api/payments/callback)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/payments/callback",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "callback"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_id\": {{cancel_payment_id}},\n  \"booking_id\": {{cancel_booking_id}},\n  \"gateway_name\": \"VIETQR\",\n  \"gateway_transaction_id\": \"MOCK-TXN-{{$timestamp}}\",\n  \"status\": \"FAILED\",\n  \"amount\": {{cancel_payment_amount}},\n  \"failure_reason\": \"Khach hang huy thanh toan tren cong\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Callback xử lý thành công (200)', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Payment chuyển FAILED', () => {",
+                  "    pm.expect(body.code).to.eql(1000);",
+                  "    pm.expect(body.data.status).to.eql('FAILED');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04. Khách hàng tự hủy đơn (POST /api/bookings/{{cancel_booking_id}}/cancel)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/{{cancel_booking_id}}/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{cancel_booking_id}}",
+                "cancel"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancel_reason\": \"Thay đổi kế hoạch cá nhân (Postman test)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Hủy đơn thành công (200)', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Booking chuyển CANCELLED', () => {",
+                  "    pm.expect(body.code).to.eql(1000);",
+                  "    pm.expect(body.data.status).to.eql('CANCELLED');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05. Lịch sử đặt vé của tôi (GET /api/bookings)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings?page=1&size=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('code = 1000 & có items', () => pm.expect(pm.response.json().data.items).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06. Đếm thông báo chưa đọc (GET /api/notifications/unread-count)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/unread-count",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "unread-count"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Có trường unread_count', () => pm.expect(pm.response.json().data).to.have.property('unread_count'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07. Danh sách thông báo của tôi (GET /api/notifications)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notifications?page=1&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('code = 1000', () => pm.expect(body.code).to.eql(1000));",
+                  "if (body.data && body.data.items && body.data.items.length > 0) {",
+                  "    pm.collectionVariables.set('notification_id', String(body.data.items[0].id));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08. Đánh dấu đã đọc toàn bộ thông báo (POST /api/notifications/read-all)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/read-all",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "read-all"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('code = 1000', () => pm.expect(pm.response.json().code).to.eql(1000));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 — Vai trò STAFF (Vận hành chuyến bay, Ghế & Hỗ trợ Booking)",
+      "description": "Sử dụng `token_staff`. Kiểm tra Dashboard vận hành (không lộ doanh thu), quản lý tồn ghế (block/unblock), tra cứu booking & vé điện tử hỗ trợ khách.",
+      "item": [
+        {
+          "name": "01. Dashboard Vận hành STAFF (không có doanh thu)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_staff}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/dashboard",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "dashboard"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.test('Có flights_today & KHÔNG lộ revenue_total', () => {",
+                  "    pm.expect(data).to.have.property('flights_today');",
+                  "    pm.expect(data).to.not.have.property('revenue_total');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. Danh sách chuyến bay quản trị (GET /api/admin/flights)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_staff}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/flights?page=1&size=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "flights"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().data.items;",
+                  "pm.test('Có danh sách chuyến bay', () => pm.expect(items).to.be.an('array').that.is.not.empty);",
+                  "if (items && items.length > 0) pm.collectionVariables.set('admin_flight_id', String(items[0].id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03. Chi tiết chuyến bay kèm hành khách (GET /api/admin/flights/{{admin_flight_id}})",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_staff}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/flights/{{admin_flight_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "flights",
+                "{{admin_flight_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('code = 1000', () => pm.expect(pm.response.json().code).to.eql(1000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04. Sơ đồ tồn ghế quản trị (GET /api/admin/flights/{{admin_flight_id}}/seat-map)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_staff}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/flights/{{admin_flight_id}}/seat-map",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "flights",
+                "{{admin_flight_id}}",
+                "seat-map"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const seats = pm.response.json().data.seats || [];",
+                  "const avail = seats.find(s => s.status === 'AVAILABLE');",
+                  "if (avail) pm.collectionVariables.set('admin_seat_id', String(avail.id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05. Khóa 1 ghế trên chuyến bay (POST /api/admin/flight-seats/{{admin_seat_id}}/block)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_staff}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/flight-seats/{{admin_seat_id}}/block",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "flight-seats",
+                "{{admin_seat_id}}",
+                "block"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Khóa ghế thành công (200)', () => pm.response.to.have.status(200));",
+                  "pm.test('Trạng thái ghế là BLOCKED', () => pm.expect(pm.response.json().data.status).to.eql('BLOCKED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06. Mở khóa lại ghế vừa khóa (POST /api/admin/flight-seats/{{admin_seat_id}}/unblock)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_staff}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/flight-seats/{{admin_seat_id}}/unblock",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "flight-seats",
+                "{{admin_seat_id}}",
+                "unblock"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Mở khóa ghế thành công (200)', () => pm.response.to.have.status(200));",
+                  "pm.test('Trạng thái ghế trở lại AVAILABLE', () => pm.expect(pm.response.json().data.status).to.eql('AVAILABLE'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07. Danh sách Booking toàn hệ thống (GET /api/admin/bookings)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_staff}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/bookings?page=1&size=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "bookings"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('code = 1000', () => pm.expect(pm.response.json().code).to.eql(1000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08. Xem chi tiết Booking hỗ trợ khách (GET /api/admin/bookings/{{booking_id}})",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_staff}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/bookings/{{booking_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "bookings",
+                "{{booking_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('code = 1000', () => pm.expect(pm.response.json().code).to.eql(1000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09. Xem E-Ticket hỗ trợ khách (GET /api/bookings/{{booking_id}}/e-tickets)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_staff}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/{{booking_id}}/e-tickets",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{booking_id}}",
+                "e-tickets"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200 (có quyền BOOKING_READ)', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 — Vai trò ADMIN (Quản trị, Danh mục, RBAC & Báo cáo Doanh thu)",
+      "description": "Sử dụng `token_admin`. Kiểm tra Dashboard doanh thu, báo cáo theo ngày/hãng, quản lý User/RBAC và toàn bộ danh mục Master Data.",
+      "item": [
+        {
+          "name": "01. Dashboard Tổng quan & Doanh thu ADMIN",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/dashboard/overview",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "dashboard",
+                "overview"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.test('Có đủ chỉ số doanh thu & biểu đồ', () => {",
+                  "    pm.expect(data).to.have.property('revenue_total');",
+                  "    pm.expect(data).to.have.property('revenue_by_airline');",
+                  "    pm.expect(data).to.have.property('bookings_by_status');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. Báo cáo Doanh thu 30 ngày (GET /api/admin/dashboard/reports)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/dashboard/reports?days=30",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "dashboard",
+                "reports"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('code = 1000', () => pm.expect(pm.response.json().code).to.eql(1000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03. Quản lý Người dùng (GET /api/admin/users)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/users?page=1&size=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Có danh sách users', () => pm.expect(pm.response.json().data.items).to.be.an('array').that.is.not.empty);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04. Danh sách Vai trò RBAC (GET /api/admin/roles)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/roles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "roles"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('code = 1000', () => pm.expect(pm.response.json().code).to.eql(1000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05. Danh sách Quyền RBAC (GET /api/admin/permissions)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/permissions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "permissions"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));",
+                  "pm.test('code = 1000', () => pm.expect(pm.response.json().code).to.eql(1000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06. Master Data — Hãng bay (GET /api/admin/airlines)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/airlines?page=1&size=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "airlines"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07. Master Data — Máy bay (GET /api/admin/aircrafts)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/aircrafts?page=1&size=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "aircrafts"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08. Master Data — Loại ghế 3 khoang (GET /api/admin/seat-types)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/seat-types?page=1&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "seat-types"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09. Master Data — Hạng vé theo hãng (GET /api/admin/fare-classes)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/fare-classes?page=1&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "fare-classes"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10. Master Data — Gói hành lý (GET /api/admin/baggage-options)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/baggage-options?page=1&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "baggage-options"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11. Master Data — Quy định hoàn vé (GET /api/admin/fare-rules)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/fare-rules?page=1&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "fare-rules"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12. Giá vé theo chuyến bay (GET /api/admin/flight-fares)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/flight-fares?flight_id={{admin_flight_id}}&page=1&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "flight-fares"
+              ],
+              "query": [
+                {
+                  "key": "flight_id",
+                  "value": "{{admin_flight_id}}"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13. Marketing — Khuyến mãi & Voucher (GET /api/admin/promotions)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/promotions?page=1&size=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "promotions"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14. Marketing — Danh sách Voucher (GET /api/admin/vouchers)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/vouchers?page=1&size=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "vouchers"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15. Nội dung — Tin tức quản trị (GET /api/admin/news)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/news?page=1&size=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "news"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 — Trường hợp Biên & Ngoại lệ (Edge Cases & Negative Tests)",
+      "description": "Kiểm thử toàn diện các lỗi validation (1001), auth (1002), phân quyền/IDOR (1003), không tìm thấy (1004), trùng lặp (1005) và vi phạm quy tắc nghiệp vụ (1006).",
+      "item": [
+        {
+          "name": "01. [Validation 1001] Đăng nhập body rỗng → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 400 BAD_REQUEST', () => pm.response.to.have.status(400));",
+                  "const body = pm.response.json();",
+                  "pm.test('Mã lỗi 1001 VALIDATION_ERROR', () => pm.expect(body.code).to.eql(1001));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. [Validation 1001] Đăng ký email sai định dạng & mật khẩu quá ngắn → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"email-khong-hop-le\",\n  \"password\": \"123\",\n  \"full_name\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 400 BAD_REQUEST', () => pm.response.to.have.status(400));",
+                  "pm.test('Mã lỗi 1001 VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql(1001));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03. [Biên > 9 khách] Tạo Booking 10 hành khách → 400 (1001)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trip_type\": \"ONE_WAY\",\n  \"segments\": [\n    {\n      \"flight_id\": 1,\n      \"fare_class_id\": 1,\n      \"segment_order\": 1\n    }\n  ],\n  \"passengers\": [\n    {\n      \"full_name\": \"HANH KHACH 1\",\n      \"gender\": \"MALE\",\n      \"birth_date\": \"1995-01-01\",\n      \"passenger_type\": \"ADULT\",\n      \"passport_number\": \"001095000001\",\n      \"phone\": \"0912345678\",\n      \"email\": \"hk1@vinafly.vn\"\n    },\n    {\n      \"full_name\": \"HANH KHACH 2\",\n      \"gender\": \"MALE\",\n      \"birth_date\": \"1995-01-01\",\n      \"passenger_type\": \"ADULT\",\n      \"passport_number\": \"001095000002\",\n      \"phone\": \"0912345678\",\n      \"email\": \"hk2@vinafly.vn\"\n    },\n    {\n      \"full_name\": \"HANH KHACH 3\",\n      \"gender\": \"MALE\",\n      \"birth_date\": \"1995-01-01\",\n      \"passenger_type\": \"ADULT\",\n      \"passport_number\": \"001095000003\",\n      \"phone\": \"0912345678\",\n      \"email\": \"hk3@vinafly.vn\"\n    },\n    {\n      \"full_name\": \"HANH KHACH 4\",\n      \"gender\": \"MALE\",\n      \"birth_date\": \"1995-01-01\",\n      \"passenger_type\": \"ADULT\",\n      \"passport_number\": \"001095000004\",\n      \"phone\": \"0912345678\",\n      \"email\": \"hk4@vinafly.vn\"\n    },\n    {\n      \"full_name\": \"HANH KHACH 5\",\n      \"gender\": \"MALE\",\n      \"birth_date\": \"1995-01-01\",\n      \"passenger_type\": \"ADULT\",\n      \"passport_number\": \"001095000005\",\n      \"phone\": \"0912345678\",\n      \"email\": \"hk5@vinafly.vn\"\n    },\n    {\n      \"full_name\": \"HANH KHACH 6\",\n      \"gender\": \"MALE\",\n      \"birth_date\": \"1995-01-01\",\n      \"passenger_type\": \"ADULT\",\n      \"passport_number\": \"001095000006\",\n      \"phone\": \"0912345678\",\n      \"email\": \"hk6@vinafly.vn\"\n    },\n    {\n      \"full_name\": \"HANH KHACH 7\",\n      \"gender\": \"MALE\",\n      \"birth_date\": \"1995-01-01\",\n      \"passenger_type\": \"ADULT\",\n      \"passport_number\": \"001095000007\",\n      \"phone\": \"0912345678\",\n      \"email\": \"hk7@vinafly.vn\"\n    },\n    {\n      \"full_name\": \"HANH KHACH 8\",\n      \"gender\": \"MALE\",\n      \"birth_date\": \"1995-01-01\",\n      \"passenger_type\": \"ADULT\",\n      \"passport_number\": \"001095000008\",\n      \"phone\": \"0912345678\",\n      \"email\": \"hk8@vinafly.vn\"\n    },\n    {\n      \"full_name\": \"HANH KHACH 9\",\n      \"gender\": \"MALE\",\n      \"birth_date\": \"1995-01-01\",\n      \"passenger_type\": \"ADULT\",\n      \"passport_number\": \"001095000009\",\n      \"phone\": \"0912345678\",\n      \"email\": \"hk9@vinafly.vn\"\n    },\n    {\n      \"full_name\": \"HANH KHACH 10\",\n      \"gender\": \"MALE\",\n      \"birth_date\": \"1995-01-01\",\n      \"passenger_type\": \"ADULT\",\n      \"passport_number\": \"0010950000010\",\n      \"phone\": \"0912345678\",\n      \"email\": \"hk10@vinafly.vn\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 400 BAD_REQUEST (tối đa 9 hành khách)', () => pm.response.to.have.status(400));",
+                  "pm.test('Mã lỗi 1001 VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql(1001));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04. [Biên segments rỗng] Tạo Booking không có chặng bay → 400 (1001)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trip_type\": \"ONE_WAY\",\n  \"segments\": [],\n  \"passengers\": [\n    {\n      \"full_name\": \"HANH KHACH 1\",\n      \"gender\": \"MALE\",\n      \"birth_date\": \"1995-01-01\",\n      \"passenger_type\": \"ADULT\",\n      \"passport_number\": \"001095000001\",\n      \"phone\": \"0912345678\",\n      \"email\": \"hk1@vinafly.vn\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 400 BAD_REQUEST', () => pm.response.to.have.status(400));",
+                  "pm.test('Mã lỗi 1001 VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql(1001));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05. [Biên quantity = 0] Chọn hành lý số lượng 0 → 400 (1001)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/{{booking_id}}/baggages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{booking_id}}",
+                "baggages"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"baggages\": [\n    {\n      \"passenger_id\": {{passenger_id}},\n      \"baggage_option_id\": {{baggage_option_id}},\n      \"quantity\": 0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 400 BAD_REQUEST (quantity >= 1)', () => pm.response.to.have.status(400));",
+                  "pm.test('Mã lỗi 1001 VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql(1001));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06. [Validation 1001] Phương thức thanh toán không hỗ trợ (CRYPTO) → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/{{booking_id}}/payments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{booking_id}}",
+                "payments"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_method\": \"CRYPTO\",\n  \"simulate_result\": \"PENDING\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 400 BAD_REQUEST', () => pm.response.to.have.status(400));",
+                  "pm.test('Mã lỗi 1001 VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql(1001));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07. [Business Rule 1006] Số Em bé (INFANT) > Người lớn (ADULT) → 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trip_type\": \"ONE_WAY\",\n  \"segments\": [\n    {\n      \"flight_id\": {{flight_id}},\n      \"fare_class_id\": {{fare_class_id}},\n      \"segment_order\": 1\n    }\n  ],\n  \"passengers\": [\n    {\n      \"full_name\": \"NGUOI LON 1\",\n      \"gender\": \"MALE\",\n      \"birth_date\": \"1990-01-01\",\n      \"passenger_type\": \"ADULT\"\n    },\n    {\n      \"full_name\": \"EM BE 1\",\n      \"gender\": \"FEMALE\",\n      \"birth_date\": \"2025-06-01\",\n      \"passenger_type\": \"INFANT\"\n    },\n    {\n      \"full_name\": \"EM BE 2\",\n      \"gender\": \"MALE\",\n      \"birth_date\": \"2025-08-01\",\n      \"passenger_type\": \"INFANT\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 409 CONFLICT (số em bé <= người lớn)', () => pm.response.to.have.status(409));",
+                  "pm.test('Mã lỗi 1006 BUSINESS_RULE_VIOLATION', () => pm.expect(pm.response.json().code).to.eql(1006));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08. [Business Rule 1006] Quy tắc tuổi D2=A (ADULT nhưng sinh năm 2022) → 409/400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trip_type\": \"ONE_WAY\",\n  \"segments\": [\n    {\n      \"flight_id\": {{flight_id}},\n      \"fare_class_id\": {{fare_class_id}},\n      \"segment_order\": 1\n    }\n  ],\n  \"passengers\": [\n    {\n      \"full_name\": \"BE KHONG DU TUOI ADULT\",\n      \"gender\": \"MALE\",\n      \"birth_date\": \"2022-05-01\",\n      \"passenger_type\": \"ADULT\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Bị chặn do tuổi không khớp loại hành khách (409/400)', () => pm.expect(pm.response.code).to.be.oneOf([400, 409]));",
+                  "pm.test('Mã lỗi 1006 hoặc 1001', () => pm.expect(pm.response.json().code).to.be.oneOf([1001, 1006]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09. [Business Rule 1006] Giữ ghế trên đơn đã CONFIRMED → 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/{{booking_id}}/seats/hold",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{booking_id}}",
+                "seats",
+                "hold"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"passenger_id\": {{passenger_id}},\n  \"flight_seat_id\": {{flight_seat_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Không cho giữ ghế đơn đã xác nhận (409)', () => pm.response.to.have.status(409));",
+                  "pm.test('Mã lỗi 1006 BUSINESS_RULE_VIOLATION', () => pm.expect(pm.response.json().code).to.eql(1006));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10. [Business Rule 1006] Thanh toán trùng đơn đã CONFIRMED → 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/{{booking_id}}/payments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{booking_id}}",
+                "payments"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_method\": \"VNPAY\",\n  \"simulate_result\": \"SUCCESS\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Không cho thanh toán lại đơn đã CONFIRMED (409)', () => pm.response.to.have.status(409));",
+                  "pm.test('Mã lỗi 1006 BUSINESS_RULE_VIOLATION', () => pm.expect(pm.response.json().code).to.eql(1006));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11. [Business Rule 1006] Hủy lại đơn đã CANCELLED → 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/{{cancel_booking_id}}/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{cancel_booking_id}}",
+                "cancel"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancel_reason\": \"Hủy lần 2\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Không cho hủy lại đơn đã hủy (409)', () => pm.response.to.have.status(409));",
+                  "pm.test('Mã lỗi 1006 BUSINESS_RULE_VIOLATION', () => pm.expect(pm.response.json().code).to.eql(1006));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12. [Duplicate 1005] Đăng ký trùng Email đã tồn tại → 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customer_email}}\",\n  \"password\": \"Password@123\",\n  \"full_name\": \"Nguoi Dung Trung Email\",\n  \"phone\": \"0901234567\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 409 CONFLICT', () => pm.response.to.have.status(409));",
+                  "pm.test('Mã lỗi 1005 DUPLICATE_RESOURCE', () => pm.expect(pm.response.json().code).to.eql(1005));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13. [Not Found 1004] Xem Booking ID không tồn tại (99999999) → 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/99999999",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "99999999"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 404 NOT_FOUND', () => pm.response.to.have.status(404));",
+                  "pm.test('Mã lỗi 1004 RESOURCE_NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql(1004));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14. [Not Found 1004] Tra cứu đặt chỗ sai PNR/Email → 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/bookings/lookup?booking_code=PNR999999&email=khongtontai@vinafly.vn",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "bookings",
+                "lookup"
+              ],
+              "query": [
+                {
+                  "key": "booking_code",
+                  "value": "PNR999999"
+                },
+                {
+                  "key": "email",
+                  "value": "khongtontai@vinafly.vn"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 404 NOT_FOUND', () => pm.response.to.have.status(404));",
+                  "pm.test('Mã lỗi 1004 RESOURCE_NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql(1004));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15. [Not Found 1004] Xác thực QR Vé điện tử giả → 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/e-tickets/verify?ticket_code=TKT-KHONG-TON-TAI-999",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "e-tickets",
+                "verify"
+              ],
+              "query": [
+                {
+                  "key": "ticket_code",
+                  "value": "TKT-KHONG-TON-TAI-999"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 404 NOT_FOUND', () => pm.response.to.have.status(404));",
+                  "pm.test('Mã lỗi 1004 RESOURCE_NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql(1004));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "16. [IDOR — Chuẩn bị] Đăng nhập Khách hàng thứ 2 (minhhoang)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Đăng nhập tài khoản khách hàng khác (`minhhoang@vinafly.vn`) để test chống IDOR ở bước 17.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customer2_email}}\",\n  \"password\": \"{{customer2_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Đăng nhập CUSTOMER 2 thành công (200)', () => pm.response.to.have.status(200));",
+                  "pm.test('Đã lưu token_customer_2', () => pm.expect(pm.collectionVariables.get('token_customer_2')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "17. [IDOR 1003/1004] Khách hàng 2 xem trộm Booking của Khách hàng 1 → 403/404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_customer_2}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookings/{{booking_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{booking_id}}"
+              ]
+            },
+            "description": "Đảm bảo người dùng không thể xem/sửa đơn đặt vé của người khác qua ID."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Chống IDOR: bị chặn 403 hoặc 404', () => pm.expect(pm.response.code).to.be.oneOf([403, 404]));",
+                  "pm.test('Mã lỗi 1003 ACCESS_DENIED hoặc 1004 RESOURCE_NOT_FOUND', () => pm.expect(pm.response.json().code).to.be.oneOf([1003, 1004]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "18. [Auth 1002] Token JWT giả mạo / sai chữ ký → 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI5OTkifQ.fake_invalid_signature"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile"
+              ]
+            },
+            "description": "Gửi header Authorization với JWT sai chữ ký để kiểm tra JwtDecoder."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả 401 UNAUTHORIZED', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "19. [Auth 1002] Refresh Token không hợp lệ → 401/400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"invalid.refresh.token.value\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Bị từ chối 401 hoặc 400', () => pm.expect(pm.response.code).to.be.oneOf([400, 401]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "admin_email",
+      "value": "admin@flightbooking.local",
+      "type": "string"
+    },
+    {
+      "key": "admin_password",
+      "value": "Admin@12345",
+      "type": "string"
+    },
+    {
+      "key": "staff_email",
+      "value": "staff@flightbooking.local",
+      "type": "string"
+    },
+    {
+      "key": "staff_password",
+      "value": "Staff@12345",
+      "type": "string"
+    },
+    {
+      "key": "customer_email",
+      "value": "customer@flightbooking.local",
+      "type": "string"
+    },
+    {
+      "key": "customer_password",
+      "value": "Customer@12345",
+      "type": "string"
+    },
+    {
+      "key": "customer2_email",
+      "value": "minhhoang@vinafly.vn",
+      "type": "string"
+    },
+    {
+      "key": "customer2_password",
+      "value": "Customer@12345",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_admin",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token_admin",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_staff",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token_staff",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_customer",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token_customer",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_customer_2",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "flight_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "flight_airline_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "fare_class_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "flight_seat_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "flight_seat_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "baggage_option_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_voucher_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "booking_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "order_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "booking_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "passenger_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "seat_hold_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "payment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ticket_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cancel_booking_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cancel_payment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cancel_payment_amount",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "notification_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "admin_flight_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "admin_seat_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Tự động lưu Access Token & Refresh Token theo đúng vai trò sau khi Login hoặc Refresh",
+          "const reqUrl = pm.request.url.toString();",
+          "if ((reqUrl.includes('/api/auth/login') || reqUrl.includes('/api/auth/refresh')) && pm.response.code >= 200 && pm.response.code < 300) {",
+          "    let body = null;",
+          "    try { body = pm.response.json(); } catch (e) { console.error('Response không phải JSON hợp lệ', e); }",
+          "    const data = body && body.data;",
+          "    const accessToken = data && data.access_token;",
+          "    const refreshToken = data && data.refresh_token;",
+          "    const roles = (data && data.user && Array.isArray(data.user.roles)) ? data.user.roles : [];",
+          "    if (typeof accessToken === 'string' && accessToken.length > 0) {",
+          "        pm.collectionVariables.set('token', accessToken);",
+          "        let targetVar = null;",
+          "        if (roles.includes('ADMIN')) {",
+          "            targetVar = 'token_admin';",
+          "            pm.collectionVariables.set('token_admin', accessToken);",
+          "            if (refreshToken) pm.collectionVariables.set('refresh_token_admin', refreshToken);",
+          "        } else if (roles.includes('STAFF')) {",
+          "            targetVar = 'token_staff';",
+          "            pm.collectionVariables.set('token_staff', accessToken);",
+          "            if (refreshToken) pm.collectionVariables.set('refresh_token_staff', refreshToken);",
+          "        } else if (roles.includes('CUSTOMER')) {",
+          "            const email = data && data.user && data.user.email;",
+          "            if (email && email === pm.collectionVariables.get('customer2_email')) {",
+          "                targetVar = 'token_customer_2';",
+          "                pm.collectionVariables.set('token_customer_2', accessToken);",
+          "            } else {",
+          "                targetVar = 'token_customer';",
+          "                pm.collectionVariables.set('token_customer', accessToken);",
+          "                if (refreshToken) pm.collectionVariables.set('refresh_token_customer', refreshToken);",
+          "            }",
+          "        }",
+          "        if (targetVar) {",
+          "            pm.test('Đã tự động lưu token vào ' + targetVar, () => {",
+          "                pm.expect(pm.collectionVariables.get(targetVar)).to.eql(accessToken);",
+          "            });",
+          "            console.log('Saved token ->', targetVar, accessToken.substring(0, 20) + '...');",
+          "        }",
+          "    }",
+          "}"
+        ]
+      }
+    }
+  ]
+}

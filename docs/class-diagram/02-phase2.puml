@@ -32,6 +32,7 @@ package "1 · Flight (Search + Management)" #F2F7FB {
     ..
     + search(departureAirportId : Long, arrivalAirportId : Long, departureDate : LocalDate, passengers : int, tripType : TripType) : ApiResponse<List<FlightSearchResult>>
     + getById(id : Long) : ApiResponse<FlightDetailResponse>
+    + getSeatMap(id : Long) : ApiResponse<FlightSeatMapResponse>
   }
 
   class FlightController {
@@ -110,7 +111,13 @@ package "3 · FareRule (quy định hoàn vé)" #F5F2FB {
 package "4 · FlightFare (giá theo chuyến)" #FBF5F2 {
 
   class FlightFareController {
-    + list(ListQuery, Long flightId, Long fareClassId)
+    - flightFareService : FlightFareService
+    ..
+    + list(ListQuery, Long flightId, Long fareClassId) : ApiResponse<PageData<FlightFareResponse>>
+    + getById(Long) : ApiResponse<FlightFareResponse>
+    + create(FlightFareRequest) : ResponseEntity<ApiResponse<FlightFareResponse>>
+    + update(Long, FlightFareRequest) : ApiResponse<FlightFareResponse>
+    + delete(Long) : ApiResponse<Void>
   }
   class FlightFareService {
     - flightFareRepository : FlightFareRepository
@@ -198,6 +205,7 @@ package "Entity (Phase 2)" #FEF9F0 {
   }
 
   class FareClass {
+    - airline : Airline
     - fareClassCode : String
     - fareClassName : String
     - seatClass : SeatClass
@@ -233,6 +241,7 @@ package "Entity (Phase 2)" #FEF9F0 {
   }
 
   class BaggageOption {
+    - airline : Airline
     - name : String
     - weightKg : BigDecimal
     - price : BigDecimal
@@ -244,12 +253,10 @@ package "Entity (Phase 2)" #FEF9F0 {
 ' ============================================================
 FareClassController --|> BaseCrudController
 FareRuleController --|> BaseCrudController
-FlightFareController --|> BaseCrudController
 BaggageOptionController --|> BaseCrudController
 
 FareClassService --|> BaseCrudService
 FareRuleService --|> BaseCrudService
-FlightFareService --|> BaseCrudService
 BaggageOptionService --|> BaseCrudService
 
 FlightSearchController --> FlightService
@@ -261,6 +268,8 @@ FlightService --> FlightFareRepository
 FlightFareService --> PricingProperties
 
 Airline "1" -- "0..*" Flight : khai thác
+Airline "1" -- "0..*" FareClass : sở hữu
+Airline "1" -- "0..*" BaggageOption : cung cấp
 Aircraft "1" -- "0..*" Flight : phục vụ
 Airport "1" -- "0..*" Flight : điểm đi
 Airport "1" -- "0..*" Flight : điểm đến

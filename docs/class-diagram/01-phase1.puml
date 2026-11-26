@@ -160,10 +160,10 @@ package "3 · RBAC — Role & Permission (read-only)" #F2F7FB {
 package "4 · Master Data (khuôn chung 5 endpoint)" #F5F2FB {
 
   abstract class BaseCrudController<T, ID, Req, Resp> {
-    + getById · create · update · toggleActive · delete
+    + getById · create · update · toggleActive · delete · bulkToggle · bulkDelete
   }
   abstract class BaseCrudService<T, ID, Req, Resp> {
-    + list · getById · create · update · toggleActive · delete
+    + list · getById · create · update · toggleActive · delete · bulkToggle · bulkDelete
   }
 
   class AirlineController {
@@ -408,11 +408,13 @@ package "Entity (Phase 1)" #FEF9F0 {
     - model : String
     - manufacturer : String
     - seatCapacity : Integer
+    - aisleAfter : String
   }
   class SeatType {
     - seatTypeCode : String
     - seatTypeName : String
     - seatClass : SeatClass
+    - surcharge : BigDecimal
     - colorHex : String
   }
   class AircraftSeat {
