@@ -244,7 +244,7 @@ class FlightServiceTest {
                 .thenReturn(Map.of(55L, List.of(saver, biz)));
 
         List<FlightSearchResult> results = service.search(
-                1L, 3L, LocalDate.of(2026, 11, 25), 2, TripType.ONE_WAY);
+                1L, 3L, LocalDate.now().plusDays(2), 2, TripType.ONE_WAY);
 
         assertThat(results).hasSize(1);
         FlightSearchResult item = results.get(0);
@@ -252,6 +252,33 @@ class FlightServiceTest {
         assertThat(item.fares()).hasSize(1);
         assertThat(item.lowestAdultPrice()).isEqualByComparingTo("890000");
         assertThat(item.lowestFareClassCode()).isEqualTo("VN_ECON_SAVER");
+    }
+
+    @Test
+    void search_ngayQuaKhu_nem1001() {
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+
+        assertThatThrownBy(() -> service.search(1L, 3L, yesterday, 1, TripType.ONE_WAY))
+                .isInstanceOf(com.example.domesticflightbookingwebbackend.exception.AppException.class)
+                .hasMessageContaining("quá khứ");
+    }
+
+    @Test
+    void search_ngayHomNay_chiTimTuThoiDiemHienTai() {
+        LocalDate today = LocalDate.now();
+        when(flightRepository.findOpenFlightsForSearch(any(), any(), any(), any()))
+                .thenReturn(List.of());
+
+        LocalDateTime before = LocalDateTime.now().minusSeconds(1);
+        service.search(1L, 3L, today, 1, TripType.ONE_WAY);
+
+        org.mockito.ArgumentCaptor<LocalDateTime> startCaptor = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(flightRepository).findOpenFlightsForSearch(
+                org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(3L),
+                startCaptor.capture(),
+                org.mockito.ArgumentMatchers.eq(today.plusDays(1).atStartOfDay()));
+        assertThat(startCaptor.getValue()).isAfterOrEqualTo(before);
     }
 
     @Test

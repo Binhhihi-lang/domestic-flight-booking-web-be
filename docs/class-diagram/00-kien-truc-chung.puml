@@ -38,6 +38,8 @@ package "Tầng 1 · Controller (REST API)" #F2F7FB {
     + update(id : ID, request : Req) : ApiResponse<Resp>
     + toggleActive(id : ID, value : boolean) : ApiResponse<Resp>
     + delete(id : ID) : ApiResponse<Void>
+    + bulkToggle(request : BulkRequest) : ApiResponse<BulkResult>
+    + bulkDelete(request : BulkRequest) : ApiResponse<BulkResult>
   }
 
   class AuthController {
@@ -83,11 +85,13 @@ package "Tầng 2 · Service (nghiệp vụ)" #F5F2FB {
     + update(id : ID, request : Req) : Resp
     + toggleActive(id : ID, active : boolean) : Resp
     + delete(id : ID) : void
+    + bulkToggle(ids : List<ID>, status : String) : BulkResult
+    + bulkDelete(ids : List<ID>) : BulkResult
     # findOrThrow(id : ID) : T
   }
 
-  abstract class BaseMapper<E, Resp> {
-    + {abstract} toResponse(entity : E) : Resp
+  interface MapStructMapper <<interface>> {
+    + toResponse(entity : E) : Resp
   }
 
   class AuthService {
@@ -148,20 +152,26 @@ package "Tầng 3 · Repository (truy cập dữ liệu)" #F2FBF5 {
 }
 
 ' ============================================================
-' TẦNG 4 — ENTITY (lớp cơ sở)
+' TẦNG 4 — ENTITY (khai báo phẳng theo từng bảng DB)
 ' ============================================================
-package "Tầng 4 · Entity (lớp cơ sở)" #FBF5F2 {
+package "Tầng 4 · Entity (JPA @Entity)" #FBF5F2 {
 
-  abstract class BaseEntity {
+  class User {
     - id : Long
+    - email : String
+    - fullName : String
+    - role : Role
+    - isActive : Boolean
+    - isDeleted : Boolean
+    - deletedAt : LocalDateTime
     - createdAt : LocalDateTime
     - updatedAt : LocalDateTime
   }
 
-  abstract class SoftDeletableEntity {
-    - isActive : Boolean
-    - isDeleted : Boolean
-    - deletedAt : LocalDateTime
+  class Role {
+    - id : Long
+    - name : String
+    - description : String
   }
 }
 
@@ -212,7 +222,7 @@ package "Dùng chung (common)" #F7F7F7 {
 ' ============================================================
 BaseCrudController --> BaseCrudService : «dùng»
 BaseCrudService --> JpaRepository : «dùng»
-BaseCrudService ..> BaseMapper : «dùng»
+BaseCrudService ..> MapStructMapper : «dùng»
 AuthController --> AuthService
 ProfileController --> ProfileService
 AuthService --> UserRepository
@@ -225,9 +235,11 @@ BaseCrudService ..> PageData : «trả về»
 BaseCrudController ..> ListQuery : «nhận»
 BaseCrudService ..> ErrorCode : «ném lỗi»
 
-SoftDeletableEntity --|> BaseEntity
 UserRepository ..|> JpaRepository
 RoleRepository ..|> JpaRepository
+UserRepository ..> User : «quản lý»
+RoleRepository ..> Role : «quản lý»
+Role "1" -- "0..*" User : «gán»
 
 ' ============================================================
 ' GHI CHÚ
@@ -249,10 +261,11 @@ note bottom of BaseCrudService
   softDelete / setActive / search / toResponse.
 end note
 
-note bottom of BaseEntity
-  Mọi entity kế thừa BaseEntity (id + created/updated).
-  SoftDeletableEntity thêm isActive + isDeleted + deletedAt
-  cho các bảng danh mục (Airline, City, ...).
+note bottom of User
+  Các JPA @Entity khai báo phẳng trực tiếp các trường
+  theo bảng SQL (không kế thừa BaseEntity / SoftDeletableEntity).
+  Các bảng danh mục có cờ isActive / isDeleted / deletedAt
+  và được xóa mềm qua softDelete() trong BaseCrudService.
 end note
 
 note bottom of ApiResponse

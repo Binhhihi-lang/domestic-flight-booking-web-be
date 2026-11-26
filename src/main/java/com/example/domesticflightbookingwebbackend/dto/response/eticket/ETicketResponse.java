@@ -23,6 +23,7 @@ public record ETicketResponse(
         String flightNumber,
         String airlineCode,
         String airlineName,
+        String airlineLogoUrl,
         String departureAirportCode,
         String departureAirportName,
         String departureCityName,

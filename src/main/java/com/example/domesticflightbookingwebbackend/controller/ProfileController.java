@@ -3,6 +3,8 @@ package com.example.domesticflightbookingwebbackend.controller;
 import com.example.domesticflightbookingwebbackend.common.ApiResponse;
 import com.example.domesticflightbookingwebbackend.dto.request.profile.UpdateProfileRequest;
 import com.example.domesticflightbookingwebbackend.dto.response.auth.UserResponse;
+import com.example.domesticflightbookingwebbackend.exception.AppException;
+import com.example.domesticflightbookingwebbackend.exception.ErrorCode;
 import com.example.domesticflightbookingwebbackend.security.SecurityUtils;
 import com.example.domesticflightbookingwebbackend.service.CloudinaryService;
 import com.example.domesticflightbookingwebbackend.service.ProfileService;
@@ -47,6 +49,12 @@ public class ProfileController {
     @PostMapping("/avatar")
     @PreAuthorize("hasAuthority('PROFILE_UPDATE_SELF')")
     public ApiResponse<Map<String, String>> uploadAvatar(@RequestParam("file") MultipartFile file) {
+        // Thiếu cấu hình Cloudinary thì báo lỗi rõ ràng thay vì để Cloudinary
+        // từ chối bằng 401 khó hiểu.
+        if (!cloudinaryService.isConfigured()) {
+            throw new AppException(ErrorCode.INTERNAL_ERROR,
+                    "Chưa cấu hình Cloudinary nên không thể tải ảnh đại diện");
+        }
         String url = cloudinaryService.uploadAvatar(file);
         profileService.updateAvatar(SecurityUtils.getCurrentUserId(), url);
         return ApiResponse.success("Cập nhật ảnh đại diện thành công", Map.of("avatar_url", url));

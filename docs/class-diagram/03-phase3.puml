@@ -37,7 +37,14 @@ package "1 · Booking (khách đặt vé)" #F2F7FB {
     + cancel(Long, CancelRequest) : ApiResponse<BookingDetailResponse>
     + addPassengers(Long, PassengerListRequest) : ApiResponse<BookingDetailResponse>
     + applyVoucher(Long, ApplyVoucherRequest) : ApiResponse<BookingDetailResponse>
+    + removeVoucher(Long) : ApiResponse<BookingDetailResponse>
     + addBaggages(Long, BaggageListRequest) : ApiResponse<BookingDetailResponse>
+  }
+
+  class BookingPublicController {
+    - bookingService : BookingService
+    ..
+    + lookup(String bookingCode, String email) : ApiResponse<BookingDetailResponse>
   }
 
   class AdminBookingController {
@@ -45,6 +52,7 @@ package "1 · Booking (khách đặt vé)" #F2F7FB {
     ..
     + list(ListQuery, String status, Long userId) : ApiResponse<PageData<BookingSummaryResponse>>
     + getById(Long) : ApiResponse<BookingDetailResponse>
+    + cancel(Long, CancelBookingRequest) : ApiResponse<BookingDetailResponse>
   }
 
   class BookingService {
@@ -101,11 +109,12 @@ package "2 · Seat Hold (giữ ghế 15 phút)" #F5F2FB {
     - seatInventoryService : SeatInventoryService
     - bookingRepository : BookingRepository
     - passengerRepository : PassengerRepository
+    - stringRedisTemplate : StringRedisTemplate
     ..
-    + hold(Long bookingId, Long passengerId, Long flightSeatId) : SeatHold
-    + release(Long seatHoldId) : void
+    + hold(Long userId, Long bookingId, Long passengerId, Long flightSeatId) : HoldSeatResponse  «3 lớp: Redis Lock + Atomic SQL + Unique Index»
+    + release(Long userId, Long bookingId, Long seatHoldId) : void
     + confirmAll(Long bookingId) : void  «thanh toán xong»
-    + releaseExpired() : int  «job quét định kỳ»
+    + releaseExpired() : int  «job quét định kỳ 60s»
   }
 }
 
@@ -119,7 +128,9 @@ package "3 · Payment (thanh toán)" #FBF5F2 {
     ..
     + create(Long bookingId, PaymentRequest) : ResponseEntity<ApiResponse<PaymentResponse>>
     + getSelf(Long paymentId) : ApiResponse<PaymentResponse>
-    + callback(CallbackRequest) : ApiResponse<Void>  «cổng gọi»
+    + callback(PaymentCallbackRequest) : ApiResponse<PaymentResponse>  «mock/cổng gọi»
+    + vnpayReturn · vnpayIpn() : «VNPay»
+    + payosReturn · payosCancel · payosWebhook · payosSync() : «payOS»
   }
 
   class PaymentService {
@@ -145,6 +156,12 @@ package "4 · E-Ticket (vé điện tử)" #F2FBF5 {
     - eTicketService : ETicketService
     ..
     + listByBooking(Long bookingId) : ApiResponse<List<ETicketResponse>>
+  }
+
+  class ETicketPublicController {
+    - eTicketService : ETicketService
+    ..
+    + verify(String ticketCode) : ApiResponse<ETicketVerifyResponse>  «quét QR ẩn PII»
   }
 
   class ETicketService {
@@ -227,6 +244,7 @@ package "6 · Notification (Thông báo in-app · Polling 60s)" #F2F7FB {
 package "Entity (Phase 3)" #FEF9F0 {
 
   class Booking {
+    - orderCode : String
     - bookingCode : String
     - user : User
     - tripType : TripType
@@ -325,10 +343,12 @@ package "Entity (Phase 3)" #FEF9F0 {
 ' QUAN HỆ
 ' ============================================================
 BookingController --> BookingService
+BookingPublicController --> BookingService
 AdminBookingController --> BookingService
 SeatHoldController --> SeatHoldService
 PaymentController --> PaymentService
 ETicketController --> ETicketService
+ETicketPublicController --> ETicketService
 DashboardController --> DashboardService
 NotificationController --> NotificationService
 

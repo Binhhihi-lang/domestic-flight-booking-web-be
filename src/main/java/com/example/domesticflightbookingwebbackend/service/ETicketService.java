@@ -1,6 +1,7 @@
 package com.example.domesticflightbookingwebbackend.service;
 
 import com.example.domesticflightbookingwebbackend.dto.response.eticket.ETicketResponse;
+import com.example.domesticflightbookingwebbackend.dto.response.eticket.ETicketVerifyResponse;
 import com.example.domesticflightbookingwebbackend.entity.Airport;
 import com.example.domesticflightbookingwebbackend.entity.Booking;
 import com.example.domesticflightbookingwebbackend.entity.BookingSegment;
@@ -186,6 +187,50 @@ public class ETicketService {
                 .toList();
     }
 
+    /**
+     * Xác thực vé điện tử công khai qua mã QR ({@code GET /api/public/e-tickets/verify}).
+     * Chỉ trả về thông tin hành trình và trạng thái vé (ISSUED / CANCELLED), không lộ PII nhạy cảm.
+     */
+    @Transactional(readOnly = true)
+    public ETicketVerifyResponse verifyByTicketCode(String ticketCode) {
+        if (ticketCode == null || ticketCode.isBlank()) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Vui lòng cung cấp số vé điện tử cần xác thực");
+        }
+        ETicket ticket = eTicketRepository.findByTicketCodeIgnoreCase(ticketCode.trim())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vé điện tử với mã: " + ticketCode.trim()));
+
+        Booking booking = ticket.getBooking();
+        BookingSegment segment = ticket.getBookingSegment();
+        Flight flight = segment.getFlight();
+        Airport dep = flight.getDepartureAirport();
+        Airport arr = flight.getArrivalAirport();
+        FareClass fc = segment.getFareClass();
+        Passenger passenger = ticket.getPassenger();
+        FlightSeat seat = ticket.getFlightSeat();
+
+        return new ETicketVerifyResponse(
+                ticket.getTicketCode(),
+                booking.getBookingCode(),
+                ticket.getStatus().name(),
+                ticket.getIssuedAt(),
+                flight.getAirline().getAirlineCode(),
+                flight.getAirline().getAirlineName(),
+                flight.getAirline().getLogoUrl(),
+                flight.getFlightNumber(),
+                dep.getAirportCode(),
+                dep.getCity() == null ? null : dep.getCity().getCityName(),
+                arr.getAirportCode(),
+                arr.getCity() == null ? null : arr.getCity().getCityName(),
+                flight.getScheduledDeparture(),
+                flight.getScheduledArrival(),
+                fc.getFareClassName(),
+                fc.getSeatClass().name(),
+                passenger.getFullName(),
+                passenger.getPassengerType().name(),
+                seat == null ? null : seat.getSeatCode()
+        );
+    }
+
     /** Hủy toàn bộ vé điện tử của một đơn đặt vé khi hủy đơn. */
     @Transactional
     public void cancelAll(Long bookingId) {
@@ -221,6 +266,7 @@ public class ETicketService {
                 flight.getFlightNumber(),
                 flight.getAirline().getAirlineCode(),
                 flight.getAirline().getAirlineName(),
+                flight.getAirline().getLogoUrl(),
                 dep.getAirportCode(),
                 dep.getAirportName(),
                 dep.getCity() == null ? null : dep.getCity().getCityName(),

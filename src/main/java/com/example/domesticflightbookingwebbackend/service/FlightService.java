@@ -126,8 +126,15 @@ public class FlightService {
         if (tripType == null) {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Loại hành trình (trip_type) là bắt buộc");
         }
+        LocalDate today = LocalDate.now();
+        if (departureDate.isBefore(today)) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "Ngày khởi hành không được ở trong quá khứ (chỉ tìm từ ngày hiện tại trở đi)");
+        }
 
-        LocalDateTime startOfDay = departureDate.atStartOfDay();
+        LocalDateTime startOfDay = departureDate.equals(today)
+                ? LocalDateTime.now()
+                : departureDate.atStartOfDay();
         LocalDateTime endOfDay = departureDate.plusDays(1).atStartOfDay();
 
         List<Flight> flights = flightRepository.findOpenFlightsForSearch(
@@ -633,6 +640,7 @@ public class FlightService {
             }
             if (publicOnly) {
                 predicates.add(cb.notEqual(root.get("operationStatus"), FlightOperationStatus.CANCELLED));
+                predicates.add(cb.greaterThanOrEqualTo(root.get("scheduledDeparture"), LocalDateTime.now()));
             }
 
             String keyword = query.getKeywordOrNull();

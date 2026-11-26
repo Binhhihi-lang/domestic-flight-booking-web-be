@@ -7,6 +7,7 @@ import com.example.domesticflightbookingwebbackend.entity.Booking;
 import com.example.domesticflightbookingwebbackend.entity.BookingSegment;
 import com.example.domesticflightbookingwebbackend.entity.City;
 import com.example.domesticflightbookingwebbackend.entity.ETicket;
+import com.example.domesticflightbookingwebbackend.entity.ETicketStatus;
 import com.example.domesticflightbookingwebbackend.entity.FareClass;
 import com.example.domesticflightbookingwebbackend.entity.Flight;
 import com.example.domesticflightbookingwebbackend.entity.FlightSeat;
@@ -19,6 +20,7 @@ import com.example.domesticflightbookingwebbackend.entity.SeatHoldStatus;
 import com.example.domesticflightbookingwebbackend.entity.User;
 import com.example.domesticflightbookingwebbackend.exception.AppException;
 import com.example.domesticflightbookingwebbackend.exception.ErrorCode;
+import com.example.domesticflightbookingwebbackend.exception.ResourceNotFoundException;
 import com.example.domesticflightbookingwebbackend.repository.BookingRepository;
 import com.example.domesticflightbookingwebbackend.repository.BookingSegmentRepository;
 import com.example.domesticflightbookingwebbackend.repository.ETicketRepository;
@@ -158,6 +160,40 @@ class ETicketServiceTest {
         assertThat(res).hasSize(1);
         assertThat(res.get(0).pnrCode()).isEqualTo("X7K2MP");
         assertThat(res.get(0).ticketCode()).isEqualTo("738-4521001");
+    }
+
+    @Test
+    void verifyByTicketCode_hopLe_traThongTinXacThucAnToan() {
+        Booking booking = booking(1049L, 1L);
+        Flight flight = flight(55L, "VN165");
+        BookingSegment seg = segment(500L, booking, flight);
+        Passenger adult = passenger(200L, booking, "Nguyễn Văn An", PassengerType.ADULT);
+
+        ETicket t = new ETicket();
+        t.setId(700L);
+        t.setBooking(booking);
+        t.setBookingSegment(seg);
+        t.setPassenger(adult);
+        t.setTicketCode("738-4521001");
+        t.setStatus(ETicketStatus.ISSUED);
+
+        when(eTicketRepository.findByTicketCodeIgnoreCase("738-4521001")).thenReturn(Optional.of(t));
+
+        var res = service.verifyByTicketCode(" 738-4521001 ");
+
+        assertThat(res.ticketCode()).isEqualTo("738-4521001");
+        assertThat(res.pnrCode()).isEqualTo("X7K2MP");
+        assertThat(res.status()).isEqualTo("ISSUED");
+        assertThat(res.flightNumber()).isEqualTo("VN165");
+        assertThat(res.passengerName()).isEqualTo("Nguyễn Văn An");
+    }
+
+    @Test
+    void verifyByTicketCode_khongTonTai_nem404() {
+        when(eTicketRepository.findByTicketCodeIgnoreCase("999-0000000")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.verifyByTicketCode("999-0000000"))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 
     private Booking booking(Long id, Long userId) {

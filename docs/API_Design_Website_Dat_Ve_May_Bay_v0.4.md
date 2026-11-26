@@ -1,21 +1,22 @@
 # API Design — Website Đặt Vé Máy Bay Nội Địa
 
-**Phiên bản:** v0.4 (Phase 1 — đã triển khai + bổ sung v0.5)
-**Ngày:** 15/10/2026 (bản gốc 13/10/2026)
-**Trạng thái:** **Đã triển khai** — backend Phase 1 hoàn thành (cụm 0–7), 45 unit test pass, verify E2E bằng curl. Cập nhật 15/10: **(1) bỏ `/v1` — base path nay là `/api`**; (2) **bỏ ví + hoàn tiền tự động** (xóa endpoint `/wallet`, hủy vé không tính tiền hoàn). Cập nhật 14/10: tách vùng path `/admin` + `/public`; ràng buộc ADMIN không xóa ADMIN; `GET /public/news-categories`; chặn bài `DRAFT`; 2 lỗ hổng phân quyền (mục 4.9). v0.4 gốc: thêm cột “Tên API (Chức năng)”, `color_hex`, nhóm endpoint bulk.
-**Căn cứ:** Database Design **v0.5** · Permission Matrix v2.0 (3 Phase) · Phase 1 Use Case Specification v2.3 · Jira Plan Sprint 2–6 (Revised)
-**Thay thế:** v0.3 (13/10/2026). Lý do bump: (1) thêm cột **Tên API (Chức năng)** vào mọi bảng endpoint; (2) đồng bộ DB v0.5 — thêm `seat_types.color_hex`; (3) thêm nhóm endpoint **thao tác hàng loạt** cho 10 module CRUD; (4) kiểm soát truy cập News; (5) **tách vùng path** `/api/admin` và `/api/public`; (6) **bỏ `/v1`**; (7) **bỏ ví và hoàn tiền tự động**.
+**Phiên bản:** v0.4 (Đồng bộ toàn bộ Phase 1, 2, 3 + Notifications V18 + Upload + Payment VNPay/payOS)
+**Ngày:** 23/11/2026 (bản gốc 13/10/2026)
+**Trạng thái:** **Đã triển khai đầy đủ** — đồng bộ 100% với mã nguồn backend thực tế (**41 Controllers**, DTOs, `SecurityConfig`, `JwtService`, `ErrorCode`) bao gồm toàn bộ Phase 1, Phase 2 (Flight, Fare, Seat Inventory), Phase 3 (Booking, Seat Hold, Payment VNPay/payOS & Mock Gateway, E-Ticket, Dashboard), Notifications in-app (V18) và Upload ảnh quản trị. Các mốc cập nhật trước: 15/10 bỏ `/v1` (base path `/api`) & bỏ ví/hoàn tiền tự động; 14/10 tách vùng `/admin` + `/public`, ràng buộc ADMIN không xóa ADMIN, `GET /public/news-categories`, chặn `DRAFT`, vá 2 lỗ hổng phân quyền (mục 4.9).
+**Căn cứ:** Database Design **v0.5** (Flyway V1–V18) · Permission Matrix v2.0 (3 Phase) · Phase 1–3 Use Case Specification · Mã nguồn Backend thực tế (`41 Controllers`)
+**Thay thế:** v0.3 (13/10/2026). Lý do bump: (1) thêm cột **Tên API (Chức năng)** vào mọi bảng endpoint; (2) đồng bộ DB v0.5 — thêm `seat_types.color_hex`; (3) thêm nhóm endpoint **thao tác hàng loạt**; (4) kiểm soát truy cập News; (5) **tách vùng path** `/api/admin` và `/api/public`; (6) **bỏ `/v1`**; (7) **bỏ ví và hoàn tiền tự động**; (8) **đồng bộ toàn bộ Phase 2, Phase 3, Notifications (V18), Upload ảnh và cổng thanh toán VNPay/payOS (23/11/2026)**.
 
 ---
 
 ## 0. Phạm vi tài liệu
 
-Tài liệu chốt **hợp đồng API (contract)** giữa Backend và Frontend cho **Phase 1**, làm chuẩn để hai repo (`domestic-flight-booking-web-backend`, `domestic-flight-booking-web-frontend`) code song song mà không lệch.
+Tài liệu chốt **hợp đồng API (contract)** giữa Backend và Frontend cho **toàn bộ hệ thống (Phase 1, 2, 3)**, đồng bộ trực tiếp với mã nguồn backend (`domestic-flight-booking-web-backend`) làm chuẩn tích hợp cho `domestic-flight-booking-web-frontend`.
 
-- **Phase 1 (đặc tả đầy đủ):** Authentication & Account, Profile, User Management, RBAC, Master Data (Airline / City / Airport / Aircraft / Seat Map), Promotion, Voucher (+ Claim voucher cho CUSTOMER), News (+ danh mục tin cho khách), **Thao tác hàng loạt**.
-- **Phase 2–3:** liệt kê sơ bộ để khóa naming, không đi sâu (bao gồm Payment, E-Ticket).
-- Tài liệu **không** mô tả code triển khai (service/controller) — chỉ mô tả bề mặt API. *Ngoại lệ: mục 4.9 ghi 2 lỗ hổng phân quyền phát hiện từ code, vì đó là điểm chặn phải sửa trước khi FE nối API thật.*
-- **Notifications (cập nhật 21/11/2026):** Đã chốt nghiệp vụ in-app only dùng **Polling 60 giây** (nguồn: `fe/docs/design/00-nghiep-vu-thong-bao.md`), bổ sung 4 endpoint tại mục 3 (Phase 3), bảng `notifications` dựng ở migration **V18**.
+- **Phase 1 (đã triển khai đầy đủ):** Authentication & Account (Slim JWT HS256 + Redis), Profile, User Management, RBAC, Master Data (Airline / City / Airport / Aircraft / Seat Map), Promotion, Voucher (+ Claim voucher cho CUSTOMER), News (+ danh mục tin cho khách), **Upload ảnh quản trị**, **Thao tác hàng loạt** (12 module kế thừa `BaseCrudController`).
+- **Phase 2 (đã triển khai đầy đủ):** Flight Management & Public Search, Fare Class, Flight Fare (tự tính giá 3 nhóm hành khách), Baggage Option (Admin + Public), Fare Rule (Admin + Public), Seat Inventory (quản trị & sơ đồ ghế công khai).
+- **Phase 3 (đã triển khai đầy đủ):** Booking (Self-service, Admin, Public Lookup), Seat Hold 15 phút (chống trùng 3 lớp), Payment (Mock Gateway + **VNPay** + **payOS** return/IPN/webhook/sync), E-Ticket (Self-service + Public QR Verify), Operational & Overview Dashboard.
+- **Notifications (đã triển khai ở migration V18):** In-app only dùng **Polling 60 giây** (nguồn: `fe/docs/design/00-nghiep-vu-thong-bao.md`), 4 endpoint tại mục 3 (Phase 3).
+- Tài liệu **không** mô tả code triển khai nội bộ (service/repository) — chỉ mô tả bề mặt API, quyền truy cập, query params và cấu trúc payload. *Ngoại lệ: mục 4.9 lưu vết 2 lỗ hổng phân quyền từng phát hiện từ code và đã được vá hoàn toàn.*
 
 > **Cột “Tên API (Chức năng)” (mới v0.4):** mọi bảng endpoint từ mục 2 trở đi có thêm một cột mô tả **chức năng nghiệp vụ** của endpoint bằng tiếng Việt, để FE đặt tên service/method và gắn nhãn UI đúng theo nghiệp vụ, không phải suy diễn từ path.
 
@@ -57,7 +58,9 @@ API chia thành **3 vùng** theo đối tượng gọi, để ranh giới quản
 ### 1.2 Định dạng dữ liệu
 
 - **JSON dùng `snake_case`** cho mọi field (khớp tên cột database).
-- Ngày: `YYYY-MM-DD` (`date`). Ngày giờ: ISO-8601 UTC, ví dụ `2026-09-19T08:43:22Z` (`timestamptz`).
+- Ngày: `YYYY-MM-DD` (`date`). Ngày giờ:
+  - Các trường `Instant` / `timestamptz` (Phase 1, Notifications): ISO-8601 UTC có hậu tố `Z`, ví dụ `2026-09-19T08:43:22Z`.
+  - Các DTO Phase 2–3 dùng `LocalDateTime` (ví dụ `scheduled_departure`, `scheduled_arrival`, `created_at`, `paid_at`, `expires_at` ở Flight / Booking / Payment / E-Ticket / Dashboard): ISO-8601 **không có hậu tố `Z`**, ví dụ `2026-09-19T08:43:22`.
 - Tiền: kiểu số (`number`) theo đơn vị **VND**, không làm tròn ở tầng API. Mọi response tiền tệ kèm field `currency` (mặc định `"VND"`).
 - Trường `null`: **luôn có mặt** trong response.
 - ID: `number` (BIGINT). Không dùng string.
@@ -114,13 +117,14 @@ Lỗi validate trả chi tiết theo field:
 
 ### 1.5 Xác thực & phân quyền
 
-- Cơ chế: **JWT Bearer** (`Authorization: Bearer <access_token>`), Spring Security 6 OAuth2 Resource Server.
-- Access token chứa `sub` (user id), `email`, và danh sách quyền dưới dạng claim `permissions`.
+- Cơ chế: **JWT Bearer** (`Authorization: Bearer <access_token>`), ký bằng thuật toán đối xứng **HS256** (`JwtService`), xác thực qua Spring Security OAuth2 Resource Server + `CustomJwtDecoder` (kiểm tra chữ ký và blacklist `jti` trên Redis).
+- **Mô hình Slim JWT:** Access/Refresh token chỉ chứa các claim gọn: `sub` (user id), `iss` (`"domestic-flight-booking"`), `jti` (UUID), `type` (`"access"` \| `"refresh"`), `roles` (vd `["ROLE_CUSTOMER"]`), `iat`, `exp`. **KHÔNG** chứa `email` và **KHÔNG** nhồi mảng `permissions` vào JWT để tránh phình header và lộ danh sách quyền nội bộ.
+- **Nạp quyền từ Redis:** Ở mỗi request, `CustomJwtAuthenticationConverter` đọc danh sách quyền hạn thực tế từ Redis (`CachedAuthorities`, fallback DB khi cache miss) để gán cho `Authentication`. Phía FE nhận danh sách `permissions` từ response `POST /api/auth/login` (hoặc hồ sơ) thay vì decode JWT.
 - **GUEST = chưa đăng nhập.** GUEST không phải một role trong database; quyền của GUEST thể hiện bằng `permitAll`. Không seed role GUEST (xem mục 4).
 - **Role cố định MVP:** `CUSTOMER`, `STAFF`, `ADMIN`.
-- Endpoint công khai (không cần token): đăng ký, đăng nhập, quên/đặt lại mật khẩu, và toàn bộ **GET** dữ liệu công khai (airline, city, airport, promotion, news, news category, flight search).
-- Endpoint `SELF` (ví dụ `PROFILE_READ_SELF`, `BOOKING_READ_SELF`): hệ thống **luôn** lấy user từ token, không nhận `user_id` từ client.
-- Lỗi xác thực: thiếu/hết hạn token → `1002`; đủ token nhưng thiếu quyền → `1003`.
+- Endpoint công khai (không cần token): đăng ký, đăng nhập, làm mới token, quên/đặt lại mật khẩu, toàn bộ **GET** dưới `/api/public/**` (airline, city, airport, promotion, news, news category, flight search, flight seat-map, baggage options, fare rules, booking lookup, e-ticket verify), tài nguyên tĩnh `GET /uploads/**`, và các endpoint callback/return/IPN/webhook của cổng thanh toán.
+- Endpoint `SELF` (ví dụ `PROFILE_READ_SELF`, `BOOKING_READ_SELF`, `NOTIFICATION_READ_SELF`): hệ thống **luôn** lấy `user_id` từ token (`SecurityUtils.getCurrentUserId()`), không nhận `user_id` từ client (chống IDOR).
+- Lỗi xác thực: thiếu/hết hạn/bị thu hồi token → `1002` (401); đủ token nhưng thiếu quyền → `1003` (403).
 
 ### 1.6 Phân trang, lọc, sắp xếp (theo BR-LIST-01 → BR-LIST-05)
 
@@ -160,8 +164,9 @@ Quy tắc bắt buộc:
 
 ### 1.7 Ngày giờ & tiền tệ
 
-- Server lưu và trả `timestamptz` theo **UTC**; client hiển thị theo múi giờ người dùng (UTC+7).
-- `date` không kèm múi giờ.
+- Các trường `Instant` / `timestamptz` (Phase 1, Notifications): server lưu và trả theo **UTC** có hậu tố `Z` (`2026-09-19T08:43:22Z`); client hiển thị theo múi giờ người dùng (UTC+7).
+- Các trường `LocalDateTime` trên DTO Phase 2–3 (lịch bay `scheduled_departure`/`scheduled_arrival`, thời điểm tạo/thanh toán/hết hạn ở Flight, Booking, Payment, E-Ticket, Dashboard): trả dạng ISO-8601 **không hậu tố `Z`** (`2026-09-19T08:43:22`).
+- `date` (`YYYY-MM-DD`) không kèm múi giờ.
 - Tiền: `number` + `currency`. Không format dấu phân cách ở tầng API.
 
 ### 1.8 Trạng thái hoạt động: `is_active` (request) vs `status` (response, bulk)
@@ -243,12 +248,12 @@ Response `201`:
 
 Ràng buộc: `email` UNIQUE → trùng trả `1005`. Mật khẩu lưu hash (BCrypt), **không bao giờ** trả `password_hash`. Role gán cứng `CUSTOMER`.
 
-**POST `/auth/login`** — request `{ "email", "password" }`. Response `data`:
+**POST `/auth/login`** — request `{ "email", "password" }`. Response `data` (JWT ký **HS256**, payload Slim JWT chỉ gồm `sub`, `iss`, `jti`, `type`, `roles`, `iat`, `exp` — không chứa `email` hay `permissions`; FE đọc `user.permissions` trực tiếp từ body response):
 
 ```json
 {
-  "access_token": "eyJhbGciOiJSUzI1NiIs...",
-  "refresh_token": "eyJhbGciOiJSUzI1NiIs...",
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
   "token_type": "Bearer",
   "expires_in": 3600,
   "user": {
@@ -262,13 +267,13 @@ Ràng buộc: `email` UNIQUE → trùng trả `1005`. Mật khẩu lưu hash (BC
 }
 ```
 
-Sai thông tin → `1007` (401). Tài khoản `INACTIVE` → `1008` (403). Thông điệp lỗi của `1007` **không** phân biệt "sai email" và "sai mật khẩu".
+Sai thông tin → `1007` (**400**, khớp `ErrorCode.INVALID_CREDENTIALS` và mục 1.4). Tài khoản `INACTIVE` → `1008` (403). Thông điệp lỗi của `1007` **không** phân biệt "sai email" và "sai mật khẩu".
 
 **POST `/auth/refresh`** — request `{ "refresh_token" }`, trả cặp token mới. Refresh token whitelist ở Redis, xoay vòng khi refresh.
 
 **POST `/auth/logout`** — response `200` với `data: null`. Blacklist `jti` ở Redis + thu hồi refresh token.
 
-**POST `/auth/password-reset/request`** — request `{ "email" }`. **Luôn** trả `200` với message trung tính, kể cả khi email không tồn tại. Trả thêm `data.reset_token` để test luồng.
+**POST `/auth/password-reset/request`** — request `{ "email" }`. **Luôn** trả `200` với message trung tính, kể cả khi email không tồn tại. Trường `data.reset_token` chỉ được trả về khi bật cấu hình `app.auth.expose-reset-token=true` (môi trường dev/test); ở môi trường production trả `data: null`.
 
 **POST `/auth/password-reset/confirm`** — request `{ "token", "new_password" }`. Token sai/hết hạn → `1006`.
 
@@ -308,8 +313,8 @@ Bảng `users`. Nguồn: USR-01 → USR-05. **Toàn bộ dưới `/api/admin/use
 | 14 | PUT | `/api/admin/users/{id}` | Cập nhật thông tin, đổi role, bật/tắt trạng thái | A — `USER_UPDATE` |
 | 15 | DELETE | `/api/admin/users/{id}` | Xóa mềm người dùng | A — `USER_DELETE` |
 | 16 | POST | `/api/admin/users/{id}/reset-password` | Đặt lại mật khẩu, trả mật khẩu tạm | A — `USER_UPDATE` |
-| 17 | PATCH | `/api/admin/users/bulk` | Bật/tắt trạng thái nhiều người dùng | A — `USER_UPDATE` |
-| 18 | DELETE | `/api/admin/users/bulk` | Xóa mềm nhiều người dùng | A — `USER_DELETE` |
+
+> **Lưu ý:** `UserController` không kế thừa `BaseCrudController` và **không** mở endpoint bulk (`PATCH/DELETE /api/admin/users/bulk`) để đảm bảo mọi thao tác thay đổi trạng thái/xóa tài khoản được kiểm soát đơn lẻ theo đúng ràng buộc phân quyền ADMIN.
 
 **POST `/users`** — ADMIN tạo user và **chọn role ngay khi tạo** (BR-RBAC-02):
 
@@ -357,15 +362,11 @@ Quy tắc kiểm tra **theo role của bản ghi bị xóa**, không theo quan h
 
 > **Vì sao cấm hẳn thay vì chỉ chặn "ADMIN cuối cùng":** quy tắc cũ chỉ chặn xóa khi còn 1 ADMIN, nên 2 ADMIN vẫn xóa được nhau — một ADMIN có thể xóa ADMIN kia rồi tự xóa mình. Cấm xóa mọi tài khoản ADMIN là ranh giới rõ và dễ kiểm chứng hơn. Muốn gỡ một ADMIN thì đổi role họ xuống STAFF/CUSTOMER trước (qua `PUT /admin/users/{id}`), rồi mới xóa — thao tác đổi role đã có kiểm tra riêng.
 
-**Áp cho cả bulk:** `DELETE /admin/users/bulk` kiểm tra từng bản ghi; id nào là ADMIN → vào `failed` với `1006`, các id STAFF/CUSTOMER vẫn xóa bình thường.
-
 **Áp cho cả `PUT /admin/users/{id}`?** Không. Ràng buộc này **chỉ cho xóa**. ADMIN vẫn được **đổi role** một ADMIN khác (ví dụ hạ xuống STAFF) — nhưng vẫn giữ ràng buộc cũ: không tự hạ quyền nếu mình là ADMIN ACTIVE cuối cùng → `1006`.
 
 Chặn leo thang đặc quyền (đã có từ v0.3): ADMIN **không** được tự hạ quyền chính mình nếu đó là ADMIN cuối cùng đang `ACTIVE` → `1006`.
 
 Filter danh sách: `status`, `role`. Whitelist sort: `email`, `full_name`, `created_at`. Whitelist keyword: `email`, `full_name`, `phone`.
-
-> **Bulk (17, 18):** xem mục 2.10. Lưu ý `users` giữ nguyên ràng buộc "ADMIN cuối cùng" **cho từng bản ghi** — bản ghi vi phạm vào `failed`, không chặn cả lô.
 
 ### 2.4 RBAC — Role & Permission (ADMIN, read-only)
 
@@ -459,8 +460,10 @@ Whitelist cho từng module:
 | Module | keyword | filter | sort |
 |---|---|---|---|
 | Airline | `airline_code`, `airline_name` | `status`, `country` | `airline_code`, `airline_name` |
-| City | `city_code`, `city_name` | `country` | `city_code`, `city_name` |
-| Airport | `airport_code`, `airport_name` | `city_id` | `airport_code`, `airport_name` |
+| City | `city_code`, `city_name` | `country`, `status` | `city_code`, `city_name` |
+| Airport | `airport_code`, `airport_name` | `city_id`, `status` | `airport_code`, `airport_name` |
+
+> **Lưu ý response `CityResponse`:** ngoài `id`, `city_code`, `city_name`, `country`, còn trả thêm `image_url` (ảnh đại diện điểm đến, bổ sung từ V10) và `status` (`ACTIVE` \| `INACTIVE`).
 
 **POST `/admin/airlines`** (ADMIN):
 
@@ -508,16 +511,20 @@ Bảng `aircrafts`, `seat_types`, `aircraft_seats`. Nguồn: AC-01→05, SEAT-01
 | 32 | GET | `/api/admin/aircrafts/{id}` | Chi tiết một máy bay | A — `AIRCRAFT_READ_DETAIL` |
 | 33 | POST | `/api/admin/aircrafts` | Tạo máy bay mới | A — `AIRCRAFT_CREATE` |
 | 34 | PUT | `/api/admin/aircrafts/{id}` | Cập nhật máy bay | A — `AIRCRAFT_UPDATE` |
-| 35 | DELETE | `/api/admin/aircrafts/{id}` | Xóa mềm máy bay | A — `AIRCRAFT_DELETE` |
-| 36 | GET | `/api/admin/seat-types` | Danh sách loại ghế | A — `SEAT_CONFIG_READ` |
-| 37 | GET | `/api/admin/seat-types/{id}` | Chi tiết một loại ghế | A — `SEAT_CONFIG_READ_DETAIL` |
-| 38 | POST | `/api/admin/seat-types` | Tạo loại ghế mới | A — `SEAT_CONFIG_CREATE` |
-| 39 | PUT | `/api/admin/seat-types/{id}` | Cập nhật loại ghế (kèm màu) | A — `SEAT_CONFIG_UPDATE` |
-| 40 | DELETE | `/api/admin/seat-types/{id}` | Xóa mềm loại ghế | A — `SEAT_CONFIG_DELETE` |
-| 41 | GET | `/api/admin/aircrafts/{id}/seat-map` | Xem sơ đồ ghế của máy bay | A — `SEAT_CONFIG_READ_DETAIL` |
-| 42 | PUT | `/api/admin/aircrafts/{id}/seat-map` | Lưu (thay thế) toàn bộ sơ đồ ghế | A — `SEAT_CONFIG_UPDATE` |
-| 43 | PATCH | `/api/admin/seat-types/bulk` | Bật/tắt trạng thái nhiều loại ghế | A — `SEAT_CONFIG_UPDATE` |
-| 44 | DELETE | `/api/admin/seat-types/bulk` | Xóa mềm nhiều loại ghế | A — `SEAT_CONFIG_DELETE` |
+| 35 | PUT | `/api/admin/aircrafts/{id}/active?value={boolean}` | Bật/tắt trạng thái một máy bay | A — `AIRCRAFT_UPDATE` |
+| 36 | DELETE | `/api/admin/aircrafts/{id}` | Xóa mềm máy bay | A — `AIRCRAFT_DELETE` |
+| 37 | PATCH | `/api/admin/aircrafts/bulk` | Bật/tắt trạng thái nhiều máy bay | A — `AIRCRAFT_UPDATE` |
+| 38 | DELETE | `/api/admin/aircrafts/bulk` | Xóa mềm nhiều máy bay | A — `AIRCRAFT_DELETE` |
+| 39 | GET | `/api/admin/seat-types` | Danh sách loại ghế | A — `SEAT_CONFIG_READ` |
+| 40 | GET | `/api/admin/seat-types/{id}` | Chi tiết một loại ghế | A — `SEAT_CONFIG_READ_DETAIL` |
+| 41 | POST | `/api/admin/seat-types` | Tạo loại ghế mới | A — `SEAT_CONFIG_CREATE` |
+| 42 | PUT | `/api/admin/seat-types/{id}` | Cập nhật loại ghế (kèm màu) | A — `SEAT_CONFIG_UPDATE` |
+| 43 | PUT | `/api/admin/seat-types/{id}/active?value={boolean}` | Bật/tắt trạng thái một loại ghế | A — `SEAT_CONFIG_UPDATE` |
+| 44 | DELETE | `/api/admin/seat-types/{id}` | Xóa mềm loại ghế | A — `SEAT_CONFIG_DELETE` |
+| 45 | GET | `/api/admin/aircrafts/{id}/seat-map` | Xem sơ đồ ghế của máy bay | A — `SEAT_CONFIG_READ_DETAIL` |
+| 46 | PUT | `/api/admin/aircrafts/{id}/seat-map` | Lưu (thay thế) toàn bộ sơ đồ ghế | A — `SEAT_CONFIG_UPDATE` |
+| 47 | PATCH | `/api/admin/seat-types/bulk` | Bật/tắt trạng thái nhiều loại ghế | A — `SEAT_CONFIG_UPDATE` |
+| 48 | DELETE | `/api/admin/seat-types/bulk` | Xóa mềm nhiều loại ghế | A — `SEAT_CONFIG_DELETE` |
 
 **POST `/admin/aircrafts`**:
 
@@ -525,7 +532,11 @@ Bảng `aircrafts`, `seat_types`, `aircraft_seats`. Nguồn: AC-01→05, SEAT-01
 { "aircraft_code": "VN-A350-01", "model": "Airbus A350-900", "manufacturer": "Airbus", "seat_capacity": 305 }
 ```
 
-`seat_capacity > 0` → vi phạm `1006`. `aircraft_code` UNIQUE → `1005`.
+`seat_capacity > 0` → vi phạm `1006`. `aircraft_code` UNIQUE → `1005`. Response `AircraftResponse` trả kèm trường `aisle_after` (chuỗi mô tả vị trí lối đi giữa các cột ghế, vd `"C"` hoặc `"C,F"`, phục vụ vẽ lưới sơ đồ ghế).
+
+Filter danh sách:
+- `GET /api/admin/aircrafts`: filter `status`, `manufacturer`.
+- `GET /api/admin/seat-types`: filter `seat_class`, `status`.
 
 **Seat Type (v0.5 — thêm `color_hex`):** danh mục loại ghế, CRUD đầy đủ.
 
@@ -596,6 +607,7 @@ Bảng `promotions`, `promotion_scopes`, `promotion_excluded_flights`. Nguồn: 
 | 48 | GET | `/api/admin/promotions/{id}` | Chi tiết một khuyến mãi (quản trị) | A — `PROMOTION_READ_DETAIL` |
 | 49 | POST | `/api/admin/promotions` | Tạo chương trình khuyến mãi | A — `PROMOTION_CREATE` |
 | 50 | PUT | `/api/admin/promotions/{id}` | Cập nhật khuyến mãi (kèm phạm vi, loại trừ) | A — `PROMOTION_UPDATE` |
+| 50b | PUT | `/api/admin/promotions/{id}/active?value={boolean}` | Bật/tắt trạng thái một khuyến mãi | A — `PROMOTION_UPDATE` |
 | 51 | DELETE | `/api/admin/promotions/{id}` | Xóa mềm khuyến mãi | A — `PROMOTION_DELETE` |
 | 52 | PATCH | `/api/admin/promotions/bulk` | Bật/tắt trạng thái nhiều khuyến mãi | A — `PROMOTION_UPDATE` |
 | 53 | DELETE | `/api/admin/promotions/bulk` | Xóa mềm nhiều khuyến mãi | A — `PROMOTION_DELETE` |
@@ -637,6 +649,8 @@ Ràng buộc từ DB v0.5 → vi phạm `1006`: `end_date >= start_date`, `disco
 
 Whitelist: keyword `promotion_code`, `promotion_name`; filter `is_active`, `discount_type`, `applicable_trip_type`; sort `start_date`, `end_date`, `promotion_code`.
 
+> **Lưu ý response `PromotionResponse`:** trả kèm các trường trình bày nội dung `description`, `image_url`, `badge_label` (bổ sung từ V10).
+
 **PUT** — cập nhật **và** toggle `is_active`, thay toàn bộ `scopes`/`excluded_flight_ids`. **DELETE** — soft delete.
 
 ### 2.8 Voucher (mô hình ví — khách không nhập mã)
@@ -649,6 +663,7 @@ Bảng `vouchers`, `voucher_scopes`, `voucher_excluded_flights`, `user_vouchers`
 | 55 | GET | `/api/admin/vouchers/{id}` | Chi tiết một voucher | A — `VOUCHER_READ_DETAIL` |
 | 56 | POST | `/api/admin/vouchers` | Tạo voucher mới | A — `VOUCHER_CREATE` |
 | 57 | PUT | `/api/admin/vouchers/{id}` | Cập nhật voucher (kèm phạm vi, loại trừ) | A — `VOUCHER_UPDATE` |
+| 57b | PUT | `/api/admin/vouchers/{id}/active?value={boolean}` | Bật/tắt trạng thái một voucher | A — `VOUCHER_UPDATE` |
 | 58 | DELETE | `/api/admin/vouchers/{id}` | Xóa mềm voucher | A — `VOUCHER_DELETE` |
 | 59 | POST | `/api/admin/vouchers/{id}/assign` | Tặng voucher cho khách (ASSIGNED) | A — `VOUCHER_UPDATE` |
 | 60 | PATCH | `/api/admin/vouchers/bulk` | Bật/tắt trạng thái nhiều voucher | A — `VOUCHER_UPDATE` |
@@ -695,7 +710,9 @@ Bảng `vouchers`, `voucher_scopes`, `voucher_excluded_flights`, `user_vouchers`
 
 Voucher **không giảm cho hành khách INFANT**.
 
-**`GET /voucher-store`** (CUSTOMER) — các voucher `distribution_type = GLOBAL`, đang hiệu lực, còn lượt nhận và khách **chưa** nhận. Trả về kèm cờ `claimed`.
+Filter danh sách `GET /api/admin/vouchers`: `is_active`, `distribution_type`, `discount_type`.
+
+**`GET /voucher-store`** (CUSTOMER) — các voucher `distribution_type = GLOBAL`, đang hiệu lực, còn lượt nhận và khách **chưa** nhận. Trả về **mảng trần** `List<VoucherStoreItem>` (không bọc `PageData`) kèm cờ `claimed`.
 
 **`POST /vouchers/{id}/claim`** (CUSTOMER):
 
@@ -747,6 +764,7 @@ Bảng `news_items`, `news_categories`, `news_category_mapping`. Nguồn: NEWS-0
 | 70 | GET | `/api/admin/news/{id}` | Chi tiết bài viết (quản trị) | A — `NEWS_READ_DETAIL` |
 | 71 | POST | `/api/admin/news` | Tạo bài viết mới (nháp) | A — `NEWS_CREATE` |
 | 72 | PUT | `/api/admin/news/{id}` | Cập nhật bài viết | A — `NEWS_UPDATE` |
+| 72b | PUT | `/api/admin/news/{id}/active?value={boolean}` | Bật/tắt trạng thái xuất bản bài viết | A — `NEWS_UPDATE` |
 | 73 | DELETE | `/api/admin/news/{id}` | Xóa mềm bài viết | A — `NEWS_DELETE` |
 | 74 | POST | `/api/admin/news/{id}/publish` | Phát hành bài viết | A — `NEWS_PUBLISH` |
 | 75 | POST | `/api/admin/news/{id}/unpublish` | Ngừng hiển thị bài viết | A — `NEWS_UNPUBLISH` |
@@ -754,6 +772,7 @@ Bảng `news_items`, `news_categories`, `news_category_mapping`. Nguồn: NEWS-0
 | 77 | GET | `/api/admin/news-categories/{id}` | Chi tiết chuyên mục (kèm bài viết) | A — `NEWS_CATEGORY_READ_DETAIL` |
 | 78 | POST | `/api/admin/news-categories` | Tạo chuyên mục mới | A — `NEWS_CATEGORY_CREATE` |
 | 79 | PUT | `/api/admin/news-categories/{id}` | Cập nhật chuyên mục | A — `NEWS_CATEGORY_UPDATE` |
+| 79b | PUT | `/api/admin/news-categories/{id}/active?value={boolean}` | Bật/tắt trạng thái một chuyên mục | A — `NEWS_CATEGORY_UPDATE` |
 | 80 | DELETE | `/api/admin/news-categories/{id}` | Xóa mềm chuyên mục | A — `NEWS_CATEGORY_DELETE` |
 | 81 | PATCH | `/api/admin/news/bulk` | Đổi trạng thái nhiều bài viết (publish/unpublish hàng loạt) | A — `NEWS_UPDATE` |
 | 82 | DELETE | `/api/admin/news/bulk` | Xóa mềm nhiều bài viết | A — `NEWS_DELETE` |
@@ -828,6 +847,31 @@ Trả **mảng trần** (không phân trang — danh mục ít), chỉ `id` + `n
 
 **News Category (quản trị):** `GET /admin/news-categories` — **ADMIN**. `DELETE` là soft delete; category còn News tham chiếu → `1006`.
 
+### 2.9b Upload ảnh quản trị (`AdminUploadController`)
+
+Dùng chung cho các màn quản trị cần tải ảnh (logo hãng, ảnh thành phố, banner khuyến mãi, thumbnail bài viết).
+
+| # | Method | Path | Tên API (Chức năng) | Quyền |
+|---|---|---|---|---|
+| 85 | POST | `/api/admin/uploads/image` | Tải ảnh dùng chung cho khu vực quản trị | A — `hasAnyRole('ADMIN','STAFF')` |
+| 86 | GET | `/uploads/**` | Truy cập file ảnh tĩnh đã tải lên (fallback local) | P (`permitAll`) |
+
+- **Request (`POST /api/admin/uploads/image`):** `multipart/form-data`, field `file`.
+- **Response (`ImageUploadResponse`):**
+
+```json
+{
+  "code": 1000,
+  "message": "Tải ảnh lên thành công",
+  "data": {
+    "url": "https://res.cloudinary.com/.../image.jpg",
+    "file_name": "banner-he-2026.jpg",
+    "content_type": "image/jpeg",
+    "size": 148290
+  }
+}
+```
+
 ### 2.10 Thao tác hàng loạt (bulk action) — mới v0.4
 
 > **Đề xuất gốc:** `De_xuat_bo_sung_DB_v0.5_mau_loai_ghe_va_bulk.md` mục 2 (FE). **Không sinh thay đổi schema** — chỉ bổ sung endpoint.
@@ -854,7 +898,7 @@ DELETE /api/admin/airlines/bulk   { "ids": [1, 2, 3] }
 
 **Vì sao `DELETE` có body:** HTTP cho phép body trong DELETE (RFC 9110), và danh sách id có thể dài. Phương án thay thế là `POST /{resource}/bulk-delete` — chốt dùng **`DELETE` có body** để đồng nhất ngữ nghĩa với DELETE đơn lẻ.
 
-**Áp cho module nào:** mọi module CRUD đang có ở Phase 1 — `airlines`, `cities`, `airports`, `aircrafts`, `seat-types`, `promotions`, `vouchers`, `news`, `news-categories`, `users`. Bulk **chỉ tồn tại ở vùng `/admin`** (không có bulk cho khách).
+**Áp cho module nào:** toàn bộ **12 module** kế thừa `BaseCrudController` — gồm 9 module Phase 1 (`airlines`, `cities`, `airports`, `aircrafts`, `seat-types`, `promotions`, `vouchers`, `news`, `news-categories`) và 3 module Phase 2 (`fare-classes`, `baggage-options`, `fare-rules`). Bulk **chỉ tồn tại ở vùng `/admin`** (không có bulk cho khách; `users` không kế thừa `BaseCrudController` nên **không** có endpoint bulk).
 
 **Request body:**
 
@@ -888,13 +932,13 @@ DELETE /api/admin/airlines/bulk   { "ids": [1, 2, 3] }
     "succeeded": [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
     "failed": [
       { "id": 4,  "code": 1006, "message": "Hãng còn chuyến bay đang hoạt động" },
-      { "id": 15, "code": 1006, "message": "Không thể ngừng hoạt động ADMIN cuối cùng" }
+      { "id": 15, "code": 1006, "message": "Loại ghế đang được gán trong sơ đồ ghế máy bay" }
     ]
   }
 }
 ```
 
-**Vì sao không all-or-nothing:** ràng buộc tham chiếu của từng module (airline còn flight → `1006`; seat_type đang được `aircraft_seats` dùng → `1006`; ADMIN cuối cùng → `1006`) khiến việc chọn 15 bản ghi rồi bị chặn cả 15 vì 1 bản ghi là trải nghiệm tệ. Trả kết quả từng phần để FE hiện "13 thành công, 2 bị chặn" kèm lý do.
+**Vì sao không all-or-nothing:** ràng buộc tham chiếu của từng module (airline còn flight → `1006`; seat_type đang được `aircraft_seats` dùng → `1006`; category còn bài viết → `1006`) khiến việc chọn 15 bản ghi rồi bị chặn cả 15 vì 1 bản ghi là trải nghiệm tệ. Trả kết quả từng phần để FE hiện "13 thành công, 2 bị chặn" kèm lý do.
 
 **Ràng buộc cần giữ:**
 
@@ -946,28 +990,55 @@ DELETE /api/admin/airlines/bulk   { "ids": [1, 2, 3] }
 
 ---
 
-## 3. Phase 2–3 — Sơ bộ (khóa naming)
+## 3. Phase 2–3 & Notifications — Đặc tả endpoint đã triển khai
 
-### Phase 2 — Flight & Fare
+### Phase 2 — Flight, Fare & Seat Inventory
 
-> Áp cùng quy tắc phân vùng: tìm kiếm/xem chuyến cho khách → `/public`; quản lý chuyến/giá → `/admin`.
+> Áp cùng quy tắc phân vùng: tìm kiếm/xem chuyến, sơ đồ ghế, gói hành lý, quy định hoàn vé cho khách → `/public`; quản lý chuyến/giá/tồn ghế → `/admin`.
 
-| Method | Path | Tên API (Chức năng) | Quyền dự kiến |
+| Method | Path | Tên API (Chức năng) | Quyền |
 |---|---|---|---|
-| GET | `/api/public/flights/search` | Tìm chuyến bay theo tuyến/ngày | P — `FLIGHT_SEARCH` |
-| GET | `/api/public/flights` | Danh sách chuyến bay (khách xem) | P — `FLIGHT_READ` |
-| GET | `/api/public/flights/{id}` | Chi tiết một chuyến bay | P — `FLIGHT_DETAIL_READ` |
-| GET | `/api/admin/flights` | Danh sách chuyến bay (quản trị) | A — `FLIGHT_READ` |
-| POST/PUT | `/api/admin/flights`, `/api/admin/flights/{id}` | Tạo / cập nhật chuyến bay | A — `FLIGHT_CREATE` / `FLIGHT_UPDATE` |
+| GET | `/api/public/flights/search` | Tìm chuyến bay theo tuyến/ngày (trả `List<FlightSearchResult>`) | P — `FLIGHT_SEARCH` |
+| GET | `/api/public/flights` | Danh sách chuyến bay đang mở bán (khách xem, phân trang) | P — `FLIGHT_READ` |
+| GET | `/api/public/flights/{id}` | Chi tiết một chuyến bay (khách xem, kèm danh sách giá) | P — `FLIGHT_DETAIL_READ` |
+| GET | `/api/public/flights/{id}/seat-map` | Sơ đồ ghế công khai của chuyến bay đang mở bán | P |
+| GET | `/api/public/baggage-options` | Danh sách gói hành lý ký gửi đang hoạt động (`?airline_id=...` + `ListQuery`) | P |
+| GET | `/api/public/fare-rules` | Quy định hoàn vé công khai mới nhất (`?airline_id=...`, trả mảng trần `List<FareRulePublicItem>`) | P |
+| GET | `/api/admin/flights` | Danh sách chuyến bay (quản trị, phân trang + 7 filter) | A — `FLIGHT_READ` |
+| GET | `/api/admin/flights/{id}` | Chi tiết một chuyến bay (quản trị, kèm danh sách hành khách) | A — `FLIGHT_DETAIL_READ` |
+| POST | `/api/admin/flights` | Tạo chuyến bay mới (hỗ trợ `parent_flight_id` tăng cường) | A — `FLIGHT_CREATE` |
+| PUT | `/api/admin/flights/{id}` | Cập nhật chuyến bay | A — `FLIGHT_UPDATE` |
 | POST | `/api/admin/flights/{id}/activate`, `/deactivate` | Mở / đóng bán chuyến bay | A — `FLIGHT_ACTIVATE` / `FLIGHT_DEACTIVATE` |
-| GET/POST/PUT/DELETE | `/api/admin/fare-classes` | Quản lý loại vé / hạng giá | A — `FARE_CLASS_*` |
-| GET/POST/PUT/DELETE | `/api/admin/flight-fares` | Quản lý giá bán theo chuyến | A — `FLIGHT_FARE_*` |
-| GET/POST/PUT/DELETE | `/api/admin/baggage-options` | Quản lý gói hành lý | A — `BAGGAGE_*` |
-| GET | `/api/admin/flights/{id}/seat-map` | Xem tồn ghế của chuyến | A — `SEAT_INVENTORY_READ_DETAIL` |
-| PUT | `/api/admin/flights/{id}/seat-inventory` | Khởi tạo / cập nhật tồn ghế chuyến | A — `SEAT_INVENTORY_MANAGE` |
-| GET/POST/PUT/DELETE | `/api/admin/fare-rules` | Quản lý quy định hoàn vé | A — `FARE_RULE_*` |
+| DELETE | `/api/admin/flights/{id}` | Xóa mềm chuyến bay | A — `FLIGHT_DEACTIVATE` |
+| GET / GET `/{id}` / POST / PUT `/{id}` / PUT `/{id}/active` / DELETE `/{id}` / PATCH & DELETE `/bulk` | `/api/admin/fare-classes` | Quản lý hạng vé (kế thừa `BaseCrudController`) | A — `FARE_CLASS_*` |
+| GET / GET `/{id}` / POST / PUT `/{id}` / DELETE `/{id}` | `/api/admin/flight-fares` | Quản lý giá bán theo chuyến | A — `FLIGHT_FARE_*` |
+| GET / GET `/{id}` / POST / PUT `/{id}` / PUT `/{id}/active` / DELETE `/{id}` / PATCH & DELETE `/bulk` | `/api/admin/baggage-options` | Quản lý gói hành lý (kế thừa `BaseCrudController`) | A — `BAGGAGE_*` |
+| GET / GET `/{id}` / POST / PUT `/{id}` / PUT `/{id}/active` / DELETE `/{id}` / PATCH & DELETE `/bulk` | `/api/admin/fare-rules` | Quản lý quy định hoàn vé (kế thừa `BaseCrudController`) | A — `FARE_RULE_*` |
+| GET | `/api/admin/flights/{flightId}/seat-map` *(alias: `/seat-inventory`)* | Xem sơ đồ & tồn ghế của chuyến | A — `SEAT_INVENTORY_READ_DETAIL` |
+| PUT | `/api/admin/flights/{flightId}/seat-inventory` | Khởi tạo / cập nhật tồn ghế chuyến | A — `SEAT_INVENTORY_MANAGE` |
+| POST | `/api/admin/flight-seats/{flightSeatId}/block`, `/unblock` | Khóa / mở khóa một ghế cụ thể trên chuyến | A — `SEAT_INVENTORY_MANAGE` |
 
-Flight Search nhận `departure_airport_id`, `arrival_airport_id`, `departure_date`, `passengers`, `trip_type`. **Bắt buộc gửi `trip_type`** để backend áp đúng `applicable_trip_type` của promotion/voucher.
+**Query params thực tế của Phase 2:**
+
+- **`GET /api/public/flights/search`**:
+  - Sân bay đi/đến: truyền theo ID (`departure_airport_id`, `arrival_airport_id`) **hoặc** mã IATA (`departure_airport_code`, `arrival_airport_code`).
+  - `departure_date` (`YYYY-MM-DD`, tùy chọn — mặc định là ngày mai nếu bỏ trống).
+  - Hành khách: `passengers` (tổng ghế) **hoặc** tách `adults` (mặc định `1`) + `children` (mặc định `0`) + `infants` (`infants` không chiếm ghế).
+  - `trip_type` (`ONE_WAY` \| `ROUND_TRIP`, mặc định `ONE_WAY`) để backend áp đúng `applicable_trip_type` của promotion.
+- **`GET /api/admin/flights`** (7 filter): `airline_id`, `departure_airport_id`, `arrival_airport_id`, `departure_date`, `operation_status`, `sales_status`, `status` (alias của `operation_status`).
+- **`GET /api/public/flights`** (4 filter): `airline_id`, `departure_airport_id`, `arrival_airport_id`, `departure_date`.
+- **Filter các danh mục Phase 2:**
+  - `GET /api/admin/fare-classes`: `airline_id`, `seat_class`, `status`.
+  - `GET /api/admin/baggage-options`: `airline_id`, `status`.
+  - `GET /api/admin/fare-rules`: `fare_class_id`, `is_refundable`.
+  - `GET /api/admin/flight-fares`: `flight_id`, `fare_class_id`.
+
+**Các trường response trọng yếu Phase 2:**
+
+- **`FlightResponse`**: `id`, `flight_number`, `airline`, `aircraft`, `departure_airport`, `arrival_airport`, `scheduled_departure`, `scheduled_arrival`, `duration_minutes`, `operation_status`, `sales_status`, `parent_flight_id`, `parent_flight_number`, `seat_capacity`, `available_seats`, `created_at`, `updated_at`.
+- **`FlightDetailResponse`**: mở rộng `FlightResponse` với `total_seats`, `available_seats`, `fares` (`List<PricedFareResponse>`), và `passengers` (`List<FlightPassengerItem>`, chỉ trả ở vùng `/admin`).
+- **`FlightSearchResult`**: `id`, `flight_id`, `flight_number`, `airline` (`AirlineBrief`), `aircraft` (`AircraftBrief` gồm `aisle_after`), `departure_airport`, `arrival_airport`, `scheduled_departure`, `scheduled_arrival`, `duration_minutes`, `operation_status`, `sales_status`, `lowest_adult_price`, `lowest_fare_class_code`, `lowest_fare_class_name`, `fares`.
+- **`FlightSeatMapResponse`**: `flight_id`, `flight_number`, `aircraft_id`, `aircraft_code`, `model`, `seat_capacity`, `aisle_after`, `total_seats`, `available_seats`, `held_seats`, `booked_seats`, `blocked_seats`, `seats[]` (`id`, `aircraft_seat_id`, `seat_code`, `seat_row`, `seat_column`, `status`, `seat_surcharge`, `seat_type`).
 
 **Giá vé trả sẵn 3 loại hành khách:** `flight_fares` chỉ lưu giá **người lớn**. Backend tính sẵn và trả **cả ba** giá:
 
@@ -979,7 +1050,7 @@ Flight Search nhận `departure_airport_id`, `arrival_airport_id`, `departure_da
   "child_price": 900000.00,
   "infant_price": 120000.00,
   "currency": "VND",
-  "effective_from": "2026-06-01T00:00:00Z", "effective_to": null
+  "effective_from": "2026-06-01T00:00:00", "effective_to": null
 }
 ```
 
@@ -987,46 +1058,81 @@ Tỉ lệ cấu hình trong `application.yml` (`app.pricing.child-fare-percent: 
 
 **Flight bổ sung khi cầu cao:** `POST /admin/flights` nhận `parent_flight_id`. Chỉ chọn được Aircraft **đã có sơ đồ ghế đủ `seat_capacity`** → nếu chưa đủ, `1006`.
 
-### Phase 3 — Booking, Payment, E-Ticket
+### Phase 3 — Booking, Seat Hold, Payment (VNPay / payOS), E-Ticket & Dashboard
 
-| Method | Path | Tên API (Chức năng) | Quyền dự kiến |
+| Method | Path | Tên API (Chức năng) | Quyền |
 |---|---|---|---|
+| GET | `/api/public/bookings/lookup?booking_code=...&email=...` | Tra cứu đặt chỗ công khai (khớp cả mã đơn và email người đặt) | P |
 | POST | `/api/bookings` | Tạo booking mới | A — `BOOKING_CREATE` |
-| GET | `/api/bookings` | Danh sách booking của tôi | A — `BOOKING_READ_SELF` |
-| GET | `/api/bookings/{id}` | Chi tiết một booking | A — `BOOKING_READ_SELF` |
-| POST | `/api/bookings/{id}/cancel` | Hủy booking (không tự hoàn tiền — xem ghi chú) | A — `BOOKING_CANCEL_SELF` |
-| POST | `/api/bookings/{id}/passengers` | Thêm hành khách vào booking | A — `PASSENGER_CREATE` |
-| POST | `/api/bookings/{id}/seats/hold` | Giữ ghế tạm 15 phút | A — `BOOKING_CREATE` |
-| POST | `/api/bookings/{id}/baggages` | Chọn gói hành lý | A — `BOOKING_CREATE` |
+| GET | `/api/bookings` | Danh sách booking của tôi (`?status=...`) | A — `BOOKING_READ_SELF` |
+| GET | `/api/bookings/{id}` | Chi tiết một booking của tôi | A — `BOOKING_READ_SELF` |
+| POST | `/api/bookings/{id}/cancel` | Hủy booking của tôi (không tự hoàn tiền — xem ghi chú) | A — `BOOKING_CANCEL_SELF` |
+| POST | `/api/bookings/{id}/passengers` | Thêm / cập nhật hành khách vào booking | A — `PASSENGER_CREATE` |
+| POST | `/api/bookings/{id}/seats/hold` | Giữ ghế tạm 15 phút (chống trùng 3 lớp) | A — `BOOKING_CREATE` |
+| DELETE | `/api/bookings/{bookingId}/seats/hold/{seatHoldId}` *(alias: `/api/bookings/{bookingId}/seats/{seatHoldId}`)* | Nhả ghế đang giữ tạm | A — `BOOKING_CREATE` |
+| POST | `/api/bookings/{id}/baggages` | Chọn gói hành lý cho booking | A — `BOOKING_CREATE` |
 | POST | `/api/bookings/{id}/voucher` | Áp voucher từ ví vào booking | A — `VOUCHER_APPLY` |
-| POST | `/api/bookings/{id}/payments` | Tạo giao dịch thanh toán | A — `PAYMENT_CREATE` |
-| GET | `/api/payments/{id}` | Chi tiết một giao dịch thanh toán | A — `PAYMENT_READ_SELF` |
-| POST | `/api/payments/callback` | Nhận callback từ cổng thanh toán | P (xác thực bằng chữ ký) |
-| GET | `/api/bookings/{id}/e-tickets` | Danh sách vé điện tử của booking | A — `ETICKET_READ_SELF` |
-| GET | `/api/admin/bookings` | Danh sách booking toàn hệ thống | A — `BOOKING_READ` (STAFF) |
-| GET | `/api/admin/dashboard/operational` | Dashboard vận hành | A — `DASHBOARD_READ_OPERATIONAL` |
-| GET | `/api/admin/dashboard` | Dashboard tổng quan | A — `DASHBOARD_READ` |
+| DELETE | `/api/bookings/{id}/voucher` | Gỡ voucher khỏi booking | A — `VOUCHER_APPLY` |
+| POST | `/api/bookings/{id}/payments` | Tạo giao dịch thanh toán (`VNPAY` \| `BANK_TRANSFER` \| `VIETQR` \| `PAYOS`) | A — `PAYMENT_CREATE` |
+| GET | `/api/payments/{paymentId}` | Chi tiết một giao dịch thanh toán | A — `hasAnyAuthority('PAYMENT_READ_SELF', 'BOOKING_READ')` |
+| POST | `/api/payments/callback` | Nhận callback từ Mock Gateway (idempotent) | P (xác thực chữ ký) |
+| GET | `/api/payments/vnpay/return` | VNPay return URL — chuyển hướng về FE (HTTP `302 Found`) | P |
+| GET / POST | `/api/payments/vnpay/ipn` | VNPay IPN server-to-server (trả JSON `{ RspCode, Message }` chuẩn VNPay) | P (HMAC-SHA512) |
+| GET | `/api/payments/payos/return` | payOS return URL — chuyển hướng về FE (HTTP `302 Found`) | P |
+| GET | `/api/payments/payos/cancel` | payOS cancel URL — chuyển hướng về FE (HTTP `302 Found`) | P |
+| POST | `/api/payments/payos/webhook` | payOS Webhook server-to-server (trả plain text `"OK"` / lỗi chữ ký) | P (HMAC-SHA256) |
+| POST | `/api/payments/{paymentId}/payos/sync` | Chủ động đồng bộ trạng thái thanh toán từ payOS (`data: { paid }`) | A — `hasAnyAuthority('PAYMENT_READ_SELF', 'BOOKING_READ')` |
+| GET | `/api/bookings/{bookingId}/e-tickets` | Danh sách vé điện tử của booking | A — `hasAnyAuthority('ETICKET_READ_SELF', 'BOOKING_READ')` |
+| GET | `/api/public/e-tickets/verify?ticket_code=...` | Xác thực vé điện tử công khai qua mã QR (ẩn PII nhạy cảm) | P |
+| GET | `/api/admin/bookings` | Danh sách booking toàn hệ thống (`?status=...&user_id=...`) | A — `BOOKING_READ` |
+| GET | `/api/admin/bookings/{id}` | Chi tiết một booking (quản trị) | A — `BOOKING_READ` |
+| POST | `/api/admin/bookings/{id}/cancel` | Hủy booking từ màn quản trị (ADMIN/STAFF) | A — `BOOKING_READ` |
+| GET | `/api/admin/dashboard/operational` | Dashboard vận hành cho STAFF (**không** chứa doanh thu) | A — `DASHBOARD_READ_OPERATIONAL` |
+| GET | `/api/admin/dashboard` *(alias: `/overview`, `/reports`)* | Dashboard tổng quan & báo cáo doanh thu cho ADMIN | A — `DASHBOARD_READ` |
 
-### Phase 3 — Notifications (In-app Polling 60s — chốt 18/11/2026)
+**Chi tiết hợp đồng Phase 3:**
 
-| Method | Path | Tên API (Chức năng) | Quyền dự kiến |
+- **Booking (`BookingSummaryResponse` / `BookingDetailResponse`):** có trường `order_code` (mã đơn hiển thị/đối soát thanh toán payOS) bên cạnh `booking_code` (PNR).
+- **Payment (`PaymentRequest` & `PaymentResponse`):**
+  - `PaymentRequest`: `payment_method` ∈ `VNPAY` \| `BANK_TRANSFER` \| `VIETQR` \| `PAYOS`; `gateway_name` (tùy chọn); `simulate_result` ∈ `PENDING` \| `SUCCESS` \| `FAILED` (tùy chọn, dùng cho Mock Gateway khi demo/test).
+  - `PaymentResponse`: trả kèm `payment_url` và object `viet_qr` (`bank_name`, `account_number`, `account_holder`, `amount`, `transfer_content`, `qr_image_url`, `qr_code_raw`, `checkout_url`) khi dùng `BANK_TRANSFER` / `VIETQR` / `PAYOS`.
+  - **Định dạng đặc thù của cổng thanh toán:** các endpoint `vnpay/ipn` (`Map<String, String>`) và `payos/webhook` (`ResponseEntity<String>`) trả đúng định dạng yêu cầu bởi VNPay/payOS (**không** bọc `ApiResponse`); các endpoint `vnpay/return`, `payos/return`, `payos/cancel` trả HTTP **`302 Found`** redirect về trang kết quả thanh toán của FE.
+- **Dashboard (`DashboardController`):**
+  - `GET /api/admin/dashboard` (và alias `/api/admin/dashboard/overview`, `/api/admin/dashboard/reports`) nhận bộ lọc `from_date`, `to_date` (`YYYY-MM-DD`), `airline_id`, `route`, `days`; trả `OverviewDashboardResponse` gồm KPI doanh thu/đặt chỗ/hành khách/tỉ lệ lấp đầy/tỉ lệ hủy cùng các mảng `revenue_by_day`, `top_routes`, `recent_bookings`, `revenue_by_airline`, `bookings_by_status`.
+  - `GET /api/admin/dashboard/operational` trả `OperationalDashboardResponse` cho STAFF (`date`, thống kê chuyến/booking/hành khách trong ngày, `today_schedule`, `pending_actions` — **tuyệt đối không có số liệu doanh thu**).
+
+### Phase 3 — Notifications (In-app Polling 60s — đã triển khai ở V18)
+
+| Method | Path | Tên API (Chức năng) | Quyền |
 |---|---|---|---|
-| GET | `/api/notifications` | Danh sách thông báo của chính tôi (`?unread=true&page=0&size=20`) | A — `NOTIFICATION_READ_SELF` |
+| GET | `/api/notifications` | Danh sách thông báo của chính tôi (`?unread=true&page=1&size=20`) | A — `NOTIFICATION_READ_SELF` |
 | GET | `/api/notifications/unread-count` | Đếm số thông báo chưa đọc (badge chuông — FE **poll mỗi 60 giây** khi tab mở) | A — `NOTIFICATION_READ_SELF` |
 | PATCH | `/api/notifications/{id}/read` | Đánh dấu 1 thông báo đã đọc (kiểm tra chủ sở hữu `user_id`) | A — `NOTIFICATION_READ_SELF` |
 | PATCH | `/api/notifications/read-all` | Đánh dấu toàn bộ thông báo của tôi đã đọc | A — `NOTIFICATION_READ_SELF` |
 
-> **Quy tắc Notifications:** Chỉ in-app (không WebSocket, không email/SMS/push), áp dụng cho `CUSTOMER`, `STAFF` và `ADMIN` (mỗi người chỉ đọc thông báo của chính mình — **không** có endpoint cho ADMIN đọc hộ user khác và **không** lộ endpoint tạo thông báo cho client; các service nội bộ tự phát kèm `dedupe_key` chống trùng). Bảng `notifications` dựng ở migration **V18**, xóa cứng sau 90 ngày.
+> **Quy tắc Notifications:** Đã triển khai đầy đủ ở migration **V18** (`NotificationController`). Chỉ in-app (không WebSocket, không email/SMS/push), áp dụng cho `CUSTOMER`, `STAFF` và `ADMIN` (mỗi người chỉ đọc thông báo của chính mình — **không** có endpoint cho ADMIN đọc hộ user khác và **không** lộ endpoint tạo thông báo cho client; các service nội bộ tự phát kèm `dedupe_key` chống trùng). Phân trang dùng `ListQuery` chuẩn (`page` bắt đầu từ **`1`**, mặc định `size=20`). Job định kỳ xóa cứng thông báo cũ hơn 90 ngày.
 
 > ❌ **ĐÃ BỎ 15/10/2026 — endpoint ví:** ~~`GET /api/wallet`~~ và ~~`GET /api/wallet/transactions`~~. Hệ thống không còn ví khách hàng (xem DB v0.5 mục 3.5). Quyền `WALLET_READ_SELF` cũng bị bỏ.
 
-> **Phân vùng Phase 3:** booking/payment **của khách** giữ ở vùng common (`/bookings`, `/payments`) vì là self-service. Chỉ **màn quản trị** (`/admin/bookings`, `/admin/dashboard`) nằm dưới `/admin`. `POST /payments/callback` là endpoint của cổng thanh toán (public, xác thực chữ ký) — không thuộc `/admin` lẫn `/public` vì không phải khách gọi.
+> **Phân vùng Phase 3:** booking/payment **của khách** giữ ở vùng common (`/bookings`, `/payments`) vì là self-service. Chỉ **màn quản trị** (`/admin/bookings`, `/admin/dashboard`) nằm dưới `/admin`, và các tra cứu không cần đăng nhập (`/public/bookings/lookup`, `/public/e-tickets/verify`) nằm dưới `/public`. Các endpoint callback/return/IPN/webhook của cổng thanh toán nằm dưới `/api/payments/**` (public, xác thực chữ ký).
 
-**`POST /bookings/{id}/voucher`** — **chọn voucher từ ví**, không nhập mã. Body nhận `user_voucher_id`, **không** nhận `voucher_code`.
+**`POST /bookings/{id}/voucher`** — **chọn voucher từ ví**, không nhập mã. Body nhận `user_voucher_id`, **không** nhận `voucher_code`. Để gỡ voucher đã chọn, gọi `DELETE /api/bookings/{id}/voucher`.
 
 **`POST /bookings/{id}/cancel` — KHÔNG tự động hoàn tiền (chốt 15/10/2026).** Hủy booking chỉ đổi `status = CANCELLED`, ghi `cancelled_at` + `cancel_reason`, giải phóng ghế và hủy vé điện tử. Hệ thống **không** tính tiền hoàn, **không** cộng ví. Chính sách hoàn của loại vé (`fare_rules`) vẫn trả trong response chi tiết booking để **hiển thị tham khảo** — kèm thông tin liên hệ đại lý (email + số điện thoại) để khách yêu cầu hoàn tiền. Xem DB v0.5 mục 5.5.
 
 **Booking của GUEST: không tồn tại.** GUEST muốn đặt vé phải đăng nhập/đăng ký CUSTOMER.
+
+### Bảng tổng hợp Enum trọng yếu (Phase 2–3)
+
+| Nhóm / Trường | Giá trị hợp lệ | Ghi chú |
+|---|---|---|
+| `flight.operation_status` | `SCHEDULED` \| `BOARDING` \| `DEPARTED` \| `LANDED` \| `DELAYED` \| `CANCELLED` | Trạng thái khai thác chuyến bay |
+| `flight.sales_status` | `OPEN` \| `CLOSED` | Trạng thái mở/đóng bán vé |
+| `flight_seat.status` | `AVAILABLE` \| `HELD` \| `BOOKED` \| `BLOCKED` | Trạng thái tồn ghế trên chuyến |
+| `seat_class` | `ECONOMY` \| `BUSINESS` \| `FIRST` | 3 hạng khoang (dùng ở `seat_types`, `fare_classes`) |
+| `payment_method` | `VNPAY` \| `BANK_TRANSFER` \| `VIETQR` \| `PAYOS` | Phương thức thanh toán ở `PaymentRequest` |
+| `passenger.gender` | `MALE` \| `FEMALE` \| `OTHER` | Giới tính hành khách |
+| `passenger_type` | `ADULT` \| `CHILD` \| `INFANT` | Loại hành khách (tính giá 100% / 75% / 10%; `INFANT` không chiếm ghế) |
 
 ---
 
@@ -1064,13 +1170,13 @@ Các endpoint `DELETE` ở Phase 1 nay là **soft delete thật**. Unique của 
 **Quan trọng cho FE:** DB v0.4/v0.5 lưu `is_active BOOLEAN`, nhưng **API trả về field `status` dạng chuỗi** `"ACTIVE"` / `"INACTIVE"` cho mọi module master data (airline, city, airport, aircraft, seat-type, promotion, voucher, news-category, user). Request `POST`/`PUT` cũng nhận `status` chuỗi.
 
 - Đề xuất bulk của FE viết ví dụ `{ "ids": [1,2,3], "is_active": false }` — **nhưng API dùng `status`**. Chốt v0.4: bulk **PATCH nhận `status`** để đồng nhất với phần còn lại: `{ "ids": [1,2,3], "status": "INACTIVE" }`.
-- Riêng `users` và `news` dùng `status` theo nghĩa trạng thái nghiệp vụ khác (`ACTIVE`/`INACTIVE` cho user; `DRAFT`/`PUBLISHED`/`UNPUBLISHED` cho news) — bulk PATCH nhận `status` với tập giá trị tương ứng của module.
+- Riêng `news` dùng `status` theo nghĩa trạng thái xuất bản (`DRAFT`/`PUBLISHED`/`UNPUBLISHED`) — `PATCH /admin/news/bulk` nhận `PUBLISHED` \| `UNPUBLISHED`. (`users` không hỗ trợ endpoint bulk.)
 
 ### 4.8 Bảng `is_active` ↔ `status` theo module (đối chiếu nhanh)
 
 | Module | Cột DB | Field API | Giá trị |
 |---|---|---|---|
-| airlines, cities, airports, aircrafts, seat-types, promotions, vouchers, news-categories, users | `is_active` | `status` | `ACTIVE` \| `INACTIVE` |
+| airlines, cities, airports, aircrafts, seat-types, promotions, vouchers, news-categories, fare-classes, baggage-options, fare-rules, users | `is_active` | `status` | `ACTIVE` \| `INACTIVE` |
 | news_items | `status` | `status` | `DRAFT` \| `PUBLISHED` \| `UNPUBLISHED` |
 
 ### 4.9 ⚠️ Lỗ hổng phân quyền phát hiện khi rà code (13/10/2026) — ✅ ĐÃ VÁ 17/10/2026
@@ -1092,12 +1198,12 @@ Hai vấn đề dưới đây **phát hiện từ code backend thực tế** (kh
 
 ---
 
-## 5. Open items — ĐÃ CHỐT khi triển khai (13/10/2026)
+## 5. Open items — ĐÃ CHỐT toàn bộ khi triển khai (cập nhật 23/11/2026)
 
 | # | Vấn đề | Quyết định đã chốt | Nơi triển khai |
 |---|---|---|---|
 | 1 | Nơi lưu token đặt lại mật khẩu | **Redis, TTL 15 phút** (`PASSWORD_RESET_TOKEN`) | `entity/redis/PasswordResetToken` + `AuthService.requestPasswordReset` |
-| 2 | Hợp đồng cổng thanh toán | **Chưa chốt** — thuộc Phase 3 | — |
+| 2 | Hợp đồng cổng thanh toán | **Đã chốt & triển khai**: hỗ trợ **VNPay** (return + IPN HMAC-SHA512), **payOS** (return/cancel + webhook HMAC-SHA256 + sync) và **Mock Gateway** (`simulate_result` / `/payments/callback`) | `PaymentController` + `PaymentService` + `VnpayGatewayService` + `PayosGatewayService` |
 | 3 | Cơ chế logout/revoke token | **Blacklist `jti` ở Redis** + thu hồi refresh token | `entity/redis/InvalidatedToken` + `CustomJwtDecoder` |
 | 4 | Refresh token | **Làm thật**: whitelist ở Redis, xoay vòng khi refresh | `entity/redis/RefreshToken` + `AuthService.refresh` |
 | 5 | Reset password bởi ADMIN | **Trả mật khẩu tạm** trong response | `POST /admin/users/{id}/reset-password` → `{temporary_password}` |
@@ -1107,9 +1213,9 @@ Hai vấn đề dưới đây **phát hiện từ code backend thực tế** (kh
 
 **Khác biệt đã chốt khi triển khai (ghi để FE biết):**
 
-- **`GET` dữ liệu công khai (Airline/City/Airport/News/Promotion) nay ở `/api/public/...`** — xem mục 1.1b và bảng đối chiếu 2.11.
+- **`GET` dữ liệu công khai (Airline/City/Airport/News/Promotion/Flight/Baggage/FareRule/BookingLookup/ETicketVerify) ở `/api/public/...`** — xem mục 1.1b, bảng đối chiếu 2.11 và mục 3.
 - **`POST /auth/refresh`** là endpoint bổ sung ngoài bảng 2.1.
-- `POST /auth/password-reset/request` trả thêm `data.reset_token` để test luồng.
+- `POST /auth/password-reset/request` chỉ trả `data.reset_token` khi `app.auth.expose-reset-token=true` (dev/test).
 - Danh sách dùng sort whitelist theo **tên field snake_case** (`created_at,desc`).
 
 **Bổ sung của v0.5 (đã ghi ở `docs/De_xuat_bo_sung_DB_v0.5_truong_anh.md` mục 7, migration V10):**
@@ -1121,12 +1227,13 @@ Hai vấn đề dưới đây **phát hiện từ code backend thực tế** (kh
 **Bổ sung của v0.4 (tài liệu này):**
 
 - `seat_types.color_hex` — migration **V12** (xem DB v0.5 mục 8).
-- Nhóm endpoint **bulk** cho 10 module (mục 2.10).
+- Nhóm endpoint **bulk** cho **12 module** kế thừa `BaseCrudController` (9 module Phase 1 + 3 module Phase 2; `users` không có bulk — xem mục 2.10).
 - **Bỏ `/v1`** khỏi mọi path (base path nay là `/api`).
 - **Bỏ ví và hoàn tiền tự động** (15/10/2026) — xóa 2 endpoint `/wallet`, bỏ quyền `WALLET_READ_SELF`, hủy vé không còn tính tiền hoàn. Migration **V13** (xem DB v0.5 mục 8).
 - **Tách vùng path `/admin` và `/public`** (mục 1.1b) — breaking change, bảng đối chiếu ở mục 2.11.
 - **Ràng buộc ADMIN không xóa ADMIN** (mục 2.3).
 - `GET /public/news-categories` + quy tắc chặn `DRAFT` ở `GET /public/news/{id}` (mục 2.9).
+- **Đồng bộ toàn bộ Phase 2, Phase 3, Notifications (V18), Upload ảnh quản trị và Payment VNPay/payOS** (23/11/2026 — 41 Controllers).
 
 ---
 
@@ -1137,19 +1244,20 @@ Hai vấn đề dưới đây **phát hiện từ code backend thực tế** (kh
 | `REGISTER`, `PASSWORD_RESET` | 2.1 — **public** |
 | `LOGIN`, `LOGOUT`, `PASSWORD_CHANGE_SELF` | 2.1 |
 | `PROFILE_READ_SELF`, `PROFILE_UPDATE_SELF` | 2.2 |
-| `USER_*` (5), `ROLE_READ` | 2.3, 2.4 — đều dưới `/admin` |
+| `USER_*` (5), `ROLE_READ` | 2.3, 2.4 — đều dưới `/admin` (`users` không có bulk) |
 | `AIRLINE_*`, `CITY_*`, `AIRPORT_*` | 2.5 — đọc ở `/public`, ghi ở `/admin` |
 | `AIRCRAFT_*`, `SEAT_CONFIG_*` | 2.6 — toàn bộ `/admin` |
 | `PROMOTION_*` | 2.7 — đọc ở `/public`, ghi ở `/admin` |
 | `VOUCHER_*`, `VOUCHER_APPLY`, `VOUCHER_CLAIM` | 2.8 — định nghĩa ở `/admin`, claim/ví ở common |
-| `NEWS_*`, `NEWS_CATEGORY_*` | 2.9 — đọc ở `/public`, ghi ở `/admin`; 2 lỗ hổng ở mục 4.9 |
-| **Bulk (mọi module)** | **2.10 — `/admin/{resource}/bulk`, dùng lại `*_UPDATE` / `*_DELETE`, KHÔNG sinh key mới** |
-| `FLIGHT_*`, `FARE_CLASS_*`, `FLIGHT_FARE_*`, `BAGGAGE_*`, `FARE_RULE_*`, `SEAT_INVENTORY_*` | 3 — Phase 2 |
-| `PASSENGER_*`, `BOOKING_*`, `PAYMENT_*`, `ETICKET_READ_SELF`, `DASHBOARD_*` | 3 — Phase 3 |
-| `NOTIFICATION_READ_SELF` | 3 — Phase 3 (`/api/notifications/**` — in-app polling 60s, chốt 18/11/2026, chờ V18) |
+| `NEWS_*`, `NEWS_CATEGORY_*` | 2.9 — đọc ở `/public`, ghi ở `/admin`; 2 lỗ hổng mục 4.9 đã vá |
+| `hasAnyRole('ADMIN','STAFF')` (Upload ảnh) | 2.9b — `POST /api/admin/uploads/image`; đọc file tĩnh qua `GET /uploads/**` (`permitAll`) |
+| **Bulk (12 module `BaseCrudController`)** | **2.10 — `/admin/{resource}/bulk`, dùng lại `*_UPDATE` / `*_DELETE`, KHÔNG sinh key mới** |
+| `FLIGHT_*`, `FARE_CLASS_*`, `FLIGHT_FARE_*`, `BAGGAGE_*`, `FARE_RULE_*`, `SEAT_INVENTORY_*` | 3 — Phase 2 (đã triển khai; có thêm các endpoint `/public` cho search, seat-map, baggage-options, fare-rules) |
+| `PASSENGER_*`, `BOOKING_*`, `PAYMENT_*`, `ETICKET_READ_SELF`, `DASHBOARD_*` | 3 — Phase 3 (đã triển khai; `GET /payments/{id}`, `POST /payments/{id}/payos/sync`, `GET /bookings/{id}/e-tickets` cho phép cả `BOOKING_READ` của ADMIN/STAFF; có thêm `/public/bookings/lookup`, `/public/e-tickets/verify` và VNPay/payOS callbacks) |
+| `NOTIFICATION_READ_SELF` | 3 — Phase 3 (`/api/notifications/**` — in-app polling 60s, đã triển khai ở V18) |
 
 ---
 
-*Hết tài liệu v0.4 — Phase 1 (đã triển khai).*
+*Hết tài liệu v0.4 — Đồng bộ toàn bộ Phase 1, 2, 3, Notifications (V18), Upload & Payment VNPay/payOS (41 Controllers).*
 
-*Lịch sử phiên bản: v0.1 (19/09/2026) → v0.2 (11/10/2026, đồng bộ Database Design v0.4) → v0.3 (13/10/2026, chốt open items + ghi nhận triển khai backend Phase 1) → v0.4 (13/10/2026, thêm cột Tên API (Chức năng), đồng bộ DB v0.5 — `color_hex`, thêm nhóm endpoint bulk) → v0.4 cập nhật 14/10/2026 (tách vùng path `/admin` + `/public`, ràng buộc ADMIN không xóa ADMIN, `GET /public/news-categories`, chặn bài `DRAFT`, 2 lỗ hổng phân quyền mục 4.9) → **v0.4 cập nhật 15/10/2026: bỏ `/v1` (base path `/api`), bỏ ví + hoàn tiền tự động (xóa endpoint `/wallet`, hủy vé không tính tiền hoàn — migration V13)**.*
+*Lịch sử phiên bản: v0.1 (19/09/2026) → v0.2 (11/10/2026, đồng bộ Database Design v0.4) → v0.3 (13/10/2026, chốt open items + ghi nhận triển khai backend Phase 1) → v0.4 (13/10/2026, thêm cột Tên API (Chức năng), đồng bộ DB v0.5 — `color_hex`, thêm nhóm endpoint bulk) → v0.4 cập nhật 14/10/2026 (tách vùng path `/admin` + `/public`, ràng buộc ADMIN không xóa ADMIN, `GET /public/news-categories`, chặn bài `DRAFT`, 2 lỗ hổng phân quyền mục 4.9) → v0.4 cập nhật 15/10/2026 (bỏ `/v1`, bỏ ví + hoàn tiền tự động — migration V13) → **v0.4 cập nhật 23/11/2026: đồng bộ 100% với 41 Controllers thực tế (Slim JWT HS256 + Redis RBAC, `AdminUploadController`, xóa bulk `users` & mở rộng bulk 12 module, toàn bộ Phase 2–3, Payment VNPay/payOS, Notifications V18, bảng Enum Phase 2–3)**.*
